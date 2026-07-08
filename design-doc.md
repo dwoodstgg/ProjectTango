@@ -75,11 +75,13 @@ Notes:
 
 **API-first.** All functionality — including the web UI — goes through a versioned REST API (`/api/v1/...`). The web app is just the first client. Future mobile/desktop apps consume the same API with the same auth flow. No business logic lives in the frontend.
 
-**Backend: .NET 10 (ASP.NET Core).** ✅ *Decided.* First-class Entra ID integration via Microsoft.Identity.Web, EF Core 10 with the Npgsql provider for PostgreSQL. A single ASP.NET Core solution hosts both the `/api/v1` endpoints and the web UI.
+**Backend: .NET 10 (ASP.NET Core).** ✅ *Decided.* First-class Entra ID integration via Microsoft.Identity.Web. A single ASP.NET Core solution hosts both the `/api/v1` endpoints and the web UI.
+
+**Data access: Dapper + Npgsql — no ORM.** ✅ *Decided (2026-07-08, revised from EF Core).* Repositories in Infrastructure use Dapper over Npgsql. The schema is plain SQL: numbered scripts embedded in the Infrastructure assembly, applied in order by **DbUp** and journaled in `schemaversions`. Run via `dotnet run --project src/ProjectTango.Web -- migrate` (CI/deploy) or automatically at startup in Development.
 
 **Frontend: ASP.NET Core MVC (Razor) + Bootstrap 5.3.x (latest).** Server-rendered Razor views styled with Bootstrap, with targeted JavaScript/fetch against the API for the interactive pieces (timesheet grid, dashboards). All views call the same application services the API exposes, so nothing is UI-only. If we later want richer interactivity, Blazor components can be added incrementally without changing the backend.
 
-**Database:** PostgreSQL on **Amazon RDS** (or Aurora PostgreSQL if we want easier scaling later). EF Core migrations manage schema. Local dev runs Postgres in Docker.
+**Database:** PostgreSQL on **Amazon RDS** (or Aurora PostgreSQL if we want easier scaling later). Schema managed by DbUp-versioned SQL scripts. Local dev uses the developer's native PostgreSQL install (browsable in pgAdmin); docker-compose provides a fallback on port 5433.
 
 **Solution structure** (local path `C:\Users\dcwoo\source\repos\dwoodstgg\ProjectTango`, remote `https://github.com/dwoodstgg/ProjectTango`):
 
@@ -88,8 +90,9 @@ ProjectTango.slnx
 ├── src/
 │   ├── ProjectTango.Domain/          Entities, enums, domain rules (no dependencies)
 │   ├── ProjectTango.Application/     Services, use cases, validation, interfaces
-│   ├── ProjectTango.Infrastructure/  EF Core (Npgsql), migrations, S3, email,
-│   │                                 Excel import (ClosedXML), PDF (QuestPDF)
+│   ├── ProjectTango.Infrastructure/  Dapper repositories (Npgsql), DbUp SQL
+│   │                                 migrations, S3, email, Excel import
+│   │                                 (ClosedXML), PDF (QuestPDF)
 │   └── ProjectTango.Web/             ASP.NET Core host: MVC UI (Bootstrap 5.3)
 │                                     + /api/v1 controllers + auth
 ├── tests/
@@ -461,7 +464,7 @@ Mobile app (.NET MAUI or React Native — time entry + approvals on the go), des
 
 ### Resolved (2026-07-08)
 
-1. **Backend stack** ✅ .NET 10 (ASP.NET Core), Bootstrap 5.3.x frontend, EF Core + Npgsql.
+1. **Backend stack** ✅ .NET 10 (ASP.NET Core), Bootstrap 5.3.x frontend. Data access originally EF Core, revised — see #17.
 2. **Overtime** ✅ None. "Extended Work Week" hours bill at the normal stored (project, role) rate — no multipliers, no overtime flag on entries.
 3. **Leave** ✅ Imports into internal non-billable projects under the internal client **The Geospatial Group**. Holidays are admin-configurable (`company_holidays`).
 4. **Import approval status** ✅ Committed as `approved`.
@@ -477,6 +480,7 @@ Mobile app (.NET MAUI or React Native — time entry + approvals on the go), des
 14. **Void** ✅ Only `issued` invoices can be voided (never `paid`); entries revert to `approved`.
 15. **Invoice numbering** ✅ Runs continuously across years; YYYY segment reflects issue date, NNNN never resets.
 16. **Workbook sheet roles** ✅ Per month: hours are entered on the calendar sheet; the `-DESC` sheet receives rolled-up hours and holds the typed work descriptions. Import takes hours from the calendar, descriptions from `-DESC`; extra client-specific calendars are skipped.
+17. **Data access** ✅ **Dapper + Npgsql, no ORM** (revised from EF Core). Schema lives in numbered plain-SQL scripts run by DbUp; enums stored as text with CHECK constraints; snake_case naming per §5.
 
 ### Still open
 

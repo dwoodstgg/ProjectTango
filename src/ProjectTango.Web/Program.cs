@@ -4,8 +4,17 @@ using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 using ProjectTango.Application;
 using ProjectTango.Infrastructure;
+using ProjectTango.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// `dotnet run -- migrate` applies pending DbUp scripts and exits (used by CI/deploy).
+// In Development, Database:MigrateOnStartup=true also applies them on normal startup.
+if (args.Contains("migrate"))
+{
+    DatabaseMigrator.MigrateToLatest(GetConnectionString(builder.Configuration));
+    return;
+}
 
 // Razor UI signs in with OIDC + cookies; /api/v1 accepts Entra-issued JWT bearer
 // tokens (the path future mobile/desktop clients use). Same app registration.
@@ -25,6 +34,11 @@ builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
+
+if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+{
+    DatabaseMigrator.MigrateToLatest(GetConnectionString(app.Configuration));
+}
 
 if (!app.Environment.IsDevelopment())
 {
@@ -55,5 +69,9 @@ app.MapControllerRoute(
 
 
 app.Run();
+
+static string GetConnectionString(IConfiguration configuration) =>
+    configuration.GetConnectionString("ProjectTango")
+    ?? throw new InvalidOperationException("Connection string 'ProjectTango' is missing.");
 
 public partial class Program;

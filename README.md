@@ -6,18 +6,29 @@ See **[design-doc.md](design-doc.md)** for the full design (source of truth) and
 
 ## Stack
 
-.NET 10 (ASP.NET Core MVC + `/api/v1` REST), Bootstrap 5.3, PostgreSQL (EF Core + Npgsql), Microsoft Entra ID auth, xUnit + Testcontainers. Hosting target: AWS.
+.NET 10 (ASP.NET Core MVC + `/api/v1` REST), Bootstrap 5.3, PostgreSQL via Dapper + Npgsql (schema in DbUp-run SQL scripts — no ORM), Microsoft Entra ID auth, xUnit + Testcontainers. Hosting target: AWS.
 
 ## Local development
 
-Prereqs: .NET 10 SDK, Docker Desktop.
+Prereqs: .NET 10 SDK, Docker Desktop (for Testcontainers), PostgreSQL (native install or Docker).
+
+The app connects to `localhost:5432`, database `projecttango`, user `tango`/`tango`. On the primary dev machine that's the native PostgreSQL 18 install (data dir `C:\Program Files\PostgreSQL\18\data`, browsable in pgAdmin). One-time setup — run as the `postgres` superuser (pgAdmin Query Tool or psql):
+
+```sql
+CREATE ROLE tango LOGIN PASSWORD 'tango';
+CREATE DATABASE projecttango OWNER tango;
+```
+
+No native Postgres? `docker compose up -d` starts one on port **5433** (it avoids clashing with a native install); change `Port` in the connection string to match.
 
 ```powershell
-docker compose up -d            # local Postgres on :5432 (tango/tango, db projecttango)
 dotnet build
-dotnet test                     # integration tests spin up their own Postgres via Testcontainers
+dotnet test                                          # integration tests spin up their own throwaway Postgres via Testcontainers
+dotnet run --project src/ProjectTango.Web -- migrate # apply pending SQL scripts (also runs automatically on dev startup)
 dotnet run --project src/ProjectTango.Web
 ```
+
+Schema lives in [src/ProjectTango.Infrastructure/Persistence/Scripts](src/ProjectTango.Infrastructure/Persistence/Scripts) as numbered SQL files; DbUp applies pending ones in order and records them in the `schemaversions` table. Never edit a script that has already shipped — add a new one.
 
 Entra ID: `AzureAd:TenantId` and `AzureAd:ClientId` in `src/ProjectTango.Web/appsettings.json` are placeholders until the app registration exists in the thegeospatialgroup.com tenant. The app runs without them; sign-in won't work until they're real.
 

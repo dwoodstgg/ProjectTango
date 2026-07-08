@@ -6,7 +6,7 @@ Time tracking, project budgeting, and invoicing app for The Geospatial Group.
 ## Stack (decided — do not substitute)
 - .NET 10, ASP.NET Core (single host: MVC/Razor UI + `/api/v1` REST controllers)
 - Bootstrap 5.3.x (latest) for all UI
-- PostgreSQL via EF Core + Npgsql; migrations in Infrastructure project; local dev Postgres in Docker
+- PostgreSQL via **Dapper + Npgsql — NO EF Core / no ORM**. Schema is versioned as plain SQL scripts run by DbUp (embedded resources in `Infrastructure/Persistence/Scripts/`, journaled in `schemaversions`). Apply with `dotnet run --project src/ProjectTango.Web -- migrate`; Development auto-migrates on startup (`Database:MigrateOnStartup`). Local dev DB: native PostgreSQL on 5432 (docker-compose fallback on 5433)
 - Auth: Microsoft Entra ID, single tenant (thegeospatialgroup.com), Microsoft.Identity.Web (cookies for UI, JWT bearer for API)
 - Excel import: ClosedXML. PDF generation: QuestPDF
 - Hosting target: AWS (ECS Fargate, RDS PostgreSQL, S3, SQS)
@@ -60,6 +60,8 @@ Phase 4: mobile/desktop clients against /api/v1, accounting integration.
 
 ## Conventions
 - API: versioned `/api/v1`, cursor pagination, RFC 7807 problem+json errors, idempotency keys on invoice issuance, OpenAPI generated from code.
-- EF Core: snake_case table/column names to match design doc; UUID primary keys.
+- Database: snake_case tables/columns, uuid PKs, enums as text + CHECK constraints. Schema changes are a NEW numbered DbUp script — never edit a script that has shipped.
+- Dapper: `DefaultTypeMap.MatchNamesWithUnderscores = true` (set in AddInfrastructure). Email lookups must cast the parameter (`email = @email::citext`) — a text-typed parameter degrades citext equality to case-sensitive. Repositories live in Infrastructure and implement Application interfaces.
+- Seeded well-known ids (roles, bootstrap Admin, internal client, INT-LEAVE) live in `Infrastructure/Persistence/SeedData.cs` and must match `0002_seed_phase1.sql`.
 - Every feature: service-layer logic + unit tests; controllers thin.
 - Bootstrap components only — no other CSS frameworks.
