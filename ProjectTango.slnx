@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ProjectTango.Application/ProjectTango.Application.csproj" />
+    <Project Path="src/ProjectTango.Domain/ProjectTango.Domain.csproj" />
+    <Project Path="src/ProjectTango.Infrastructure/ProjectTango.Infrastructure.csproj" />
+    <Project Path="src/ProjectTango.Web/ProjectTango.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ProjectTango.IntegrationTests/ProjectTango.IntegrationTests.csproj" />
+    <Project Path="tests/ProjectTango.UnitTests/ProjectTango.UnitTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,16 @@
+# Local dev database. Start with: docker compose up -d
+services:
+  postgres:
+    image: postgres:17
+    container_name: projecttango-postgres
+    environment:
+      POSTGRES_DB: projecttango
+      POSTGRES_USER: tango
+      POSTGRES_PASSWORD: tango
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
