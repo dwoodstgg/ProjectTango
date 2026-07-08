@@ -8,8 +8,8 @@ html {
   }
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-select:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, .2);
 }
 
 html {
@@ -28,4 +28,122 @@ body {
 
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
   text-align: start;
+}
+
+/* ---- Forms ---------------------------------------------------------- */
+
+/* Standard width for single-column edit/create forms. Centered on the page. */
+.form-page {
+  max-width: 640px;
+  margin-inline: auto;
+}
+
+/* Card-based form chrome shared by every create/edit page. */
+.form-card {
+  border: 1px solid #e9ecef;
+  border-radius: .625rem;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 4px 16px rgba(16, 24, 40, .06);
+}
+
+.form-card .card-header {
+  background-color: #fff;
+  border-bottom: 1px solid #eef0f2;
+  padding: 1.25rem 1.5rem .9rem;
+  border-top-left-radius: .625rem;
+  border-top-right-radius: .625rem;
+}
+
+.form-card .card-header h1 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  margin: 0;
+  color: #1f2933;
+}
+
+/* Optional muted lead line under a form title. */
+.form-card .form-subtitle {
+  margin: .35rem 0 0;
+  font-size: .875rem;
+  color: #6c757d;
+}
+
+.form-card .card-body {
+  padding: 1.5rem;
+}
+
+.form-card .card-footer {
+  background-color: #f8f9fa;
+  border-top: 1px solid #eef0f2;
+  padding: .9rem 1.5rem;
+  border-bottom-left-radius: .625rem;
+  border-bottom-right-radius: .625rem;
+}
+
+/* Field labels: a touch heavier and calmer than the bold default. */
+.form-card .form-label {
+  font-weight: 500;
+  margin-bottom: .35rem;
+  color: #343a40;
+}
+
+/* Comfortable, consistent input sizing across text/select fields. */
+.form-card .form-control,
+.form-card .form-select {
+  padding: .5rem .75rem;
+  border-color: #d5d9de;
+}
+
+.form-card .form-control::placeholder {
+  color: #adb5bd;
+}
+
+/* Grouped sub-sections within a form (e.g. billing address). */
+.form-section {
+  border: 0;
+  border-top: 1px solid #eef0f2;
+  margin-top: 1.75rem;
+  padding-top: 1.35rem;
+}
+
+.form-section > legend {
+  float: none;
+  width: auto;
+  font-size: .78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #6c757d;
+  margin-bottom: .85rem;
+}
+
+/* Panel cards used on management pages (project details, rate card, team). */
+.panel-card {
+  border: 1px solid #e9ecef;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 4px 16px rgba(16, 24, 40, .06);
+}
+
+.panel-card > .card-header {
+  background-color: #fff;
+  border-bottom: 1px solid #eef0f2;
+  font-weight: 600;
+  color: #1f2933;
+}
+
+/* Inset "add a row" action zone under a table (set rate, assign employee). */
+.inline-add {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border: 1px solid #eef0f2;
+  border-radius: .5rem;
+}
+
+.inline-add .inline-add-title {
+  font-size: .78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #6c757d;
+  margin-bottom: .65rem;
 }

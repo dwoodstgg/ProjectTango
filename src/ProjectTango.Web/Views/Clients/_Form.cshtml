@@ -20,19 +20,22 @@
     </div>
 </div>
 
-<div class="mb-3">
+<div class="mb-1">
     <label asp-for="PaymentTermsDays" class="form-label"></label>
-    <input asp-for="PaymentTermsDays" class="form-control" style="max-width: 10rem" />
+    <div class="input-group" style="max-width: 12rem">
+        <input asp-for="PaymentTermsDays" class="form-control" />
+        <span class="input-group-text">days</span>
+    </div>
     <span asp-validation-for="PaymentTermsDays" class="text-danger"></span>
 </div>
 
-<fieldset class="mb-3">
-    <legend class="fs-6 text-muted">Billing address</legend>
+<fieldset class="form-section">
+    <legend>Billing address</legend>
     <div class="mb-2"><input asp-for="AddressLine1" class="form-control" placeholder="Address line 1" /></div>
     <div class="mb-2"><input asp-for="AddressLine2" class="form-control" placeholder="Address line 2" /></div>
-    <div class="row">
-        <div class="col-md-5 mb-2"><input asp-for="City" class="form-control" placeholder="City" /></div>
-        <div class="col-md-3 mb-2"><input asp-for="State" class="form-control" placeholder="State" /></div>
-        <div class="col-md-4 mb-2"><input asp-for="PostalCode" class="form-control" placeholder="Postal code" /></div>
+    <div class="row g-2">
+        <div class="col-md-5"><input asp-for="City" class="form-control" placeholder="City" /></div>
+        <div class="col-md-3"><input asp-for="State" class="form-control" placeholder="State" /></div>
+        <div class="col-md-4"><input asp-for="PostalCode" class="form-control" placeholder="ZIP" /></div>
     </div>
 </fieldset>

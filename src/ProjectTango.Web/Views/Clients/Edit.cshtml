@@ -5,22 +5,25 @@
     ViewData["Title"] = $"Edit {client.Name}";
 }
 
-<h1>
-    Edit @client.Name
-    @if (client.IsInternal)
-    {
-        <span class="badge text-bg-info fs-6 align-middle" title="Internal client — never invoiced">internal</span>
-    }
-</h1>
-
-<div class="row">
-    <div class="col-md-6">
-        <form asp-action="Edit" asp-route-id="@client.Id">
-            <partial name="_Form" model="Model" />
-            <button type="submit" class="btn btn-primary">Save</button>
-            <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
-        </form>
-    </div>
+<div class="form-page">
+    <form asp-action="Edit" asp-route-id="@client.Id">
+        <div class="card shadow-sm form-card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h1>Edit @client.Name</h1>
+                @if (client.IsInternal)
+                {
+                    <span class="badge text-bg-info" title="Internal client — never invoiced">internal</span>
+                }
+            </div>
+            <div class="card-body">
+                <partial name="_Form" model="Model" />
+            </div>
+            <div class="card-footer d-flex gap-2 justify-content-end">
+                <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+                <button type="submit" class="btn btn-primary">Save changes</button>
+            </div>
+        </div>
+    </form>
 </div>
 
 @section Scripts {

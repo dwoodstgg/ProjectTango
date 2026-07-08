@@ -21,12 +21,11 @@ public class RolesController(RoleAdminService roleAdmin) : Controller
         try
         {
             await roleAdmin.RenameAsync(id, displayName, cancellationToken);
+            return Json(new { ok = true, displayName = (displayName ?? "").Trim() });
         }
         catch (DomainException ex)
         {
-            TempData["Error"] = ex.Message;
+            return Json(new { ok = false, error = ex.Message });
         }
-
-        return RedirectToAction(nameof(Index));
     }
 }

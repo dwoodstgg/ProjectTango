@@ -3,16 +3,21 @@
     ViewData["Title"] = "New Client";
 }
 
-<h1>New Client</h1>
-
-<div class="row">
-    <div class="col-md-6">
-        <form asp-action="Create">
-            <partial name="_Form" model="Model" />
-            <button type="submit" class="btn btn-primary">Create</button>
-            <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
-        </form>
-    </div>
+<div class="form-page">
+    <form asp-action="Create">
+        <div class="card shadow-sm form-card">
+            <div class="card-header">
+                <h1>New client</h1>
+            </div>
+            <div class="card-body">
+                <partial name="_Form" model="Model" />
+            </div>
+            <div class="card-footer d-flex gap-2 justify-content-end">
+                <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+                <button type="submit" class="btn btn-primary">Create client</button>
+            </div>
+        </div>
+    </form>
 </div>
 
 @section Scripts {

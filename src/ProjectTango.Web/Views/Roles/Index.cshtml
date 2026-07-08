@@ -4,37 +4,46 @@
     ViewData["Title"] = "Roles";
 }
 
-@if (TempData["Error"] is string error)
-{
-    <div class="alert alert-danger alert-dismissible" role="alert">
-        @error
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-}
+<style>
+    .role-name { cursor: pointer; outline: none; border-radius: .25rem; }
+    .role-name:not(.editing):hover { background: #f1f3f5; }
+    .role-name:not(.editing):hover::after { content: " ✎"; color: #adb5bd; font-size: .85em; }
+    .role-name.editing { background: #fff; box-shadow: 0 0 0 2px #0d6efd55; padding-left: .35rem; padding-right: .35rem; cursor: text; }
+    .role-name.save-ok { background: #d1e7dd; transition: background .2s; }
+    .role-name.save-err { background: #f8d7da; transition: background .2s; }
+</style>
 
 <h1 class="mb-1">Roles</h1>
 <p class="text-muted">
-    Rename a role's label here. Roles double as billing roles on rate cards, so the name you
-    choose shows on timesheets and invoices. Permissions are keyed internally and are never
-    affected by renaming.
+    Double-click a role name to rename it; it saves when you click away.
+    Roles double as billing roles on rate cards, so the name you choose shows on timesheets
+    and invoices. Permissions are keyed internally and are never affected by renaming.
 </p>
 
-<div class="card shadow-sm" style="max-width: 720px">
+<div id="role-error" class="alert alert-danger d-none" role="alert"></div>
+
+@Html.AntiForgeryToken()
+
+<div class="card shadow-sm" style="max-width: 640px">
     <div class="card-body p-0">
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
                 <tr>
-                    <th class="ps-3">Role</th>
-                    <th>Attributes</th>
-                    <th class="text-end pe-3">Rename</th>
+                    <th class="ps-3" style="width: 55%">Role</th>
+                    <th class="pe-3">Attributes</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var role in Model)
                 {
                     <tr>
-                        <td class="ps-3 fw-medium">@role.DisplayName</td>
-                        <td>
+                        <td class="ps-3">
+                            <span class="role-name fw-medium d-inline-block"
+                                  data-id="@role.Id"
+                                  data-original="@role.DisplayName"
+                                  title="Double-click to rename">@role.DisplayName</span>
+                        </td>
+                        <td class="pe-3">
                             @if (role.IsSystemAdmin)
                             {
                                 <span class="badge text-bg-danger">system admin</span>
@@ -48,17 +57,86 @@
                                 <span class="badge text-bg-light text-muted">non-billable</span>
                             }
                         </td>
-                        <td class="pe-3">
-                            <form asp-action="Rename" method="post" class="d-flex gap-2 justify-content-end">
-                                <input type="hidden" name="id" value="@role.Id" />
-                                <input type="text" name="displayName" value="@role.DisplayName"
-                                       class="form-control form-control-sm" style="max-width: 14rem" required />
-                                <button type="submit" class="btn btn-sm btn-primary">Save</button>
-                            </form>
-                        </td>
                     </tr>
                 }
             </tbody>
         </table>
     </div>
 </div>
+
+@section Scripts {
+<script>
+    (function () {
+        const url = '@Url.Action("Rename")';
+        const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+        const errorBox = document.getElementById('role-error');
+
+        function showError(msg) {
+            errorBox.textContent = msg;
+            errorBox.classList.remove('d-none');
+        }
+        function clearError() {
+            errorBox.classList.add('d-none');
+        }
+        function flash(el, cls) {
+            el.classList.add(cls);
+            setTimeout(() => el.classList.remove(cls), 900);
+        }
+
+        async function save(el) {
+            const value = el.textContent.replace(/\s+/g, ' ').trim();
+            const original = el.dataset.original;
+            if (value === original) { el.textContent = original; return; }
+            if (value.length === 0) { el.textContent = original; return; }
+
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'RequestVerificationToken': token },
+                    body: new URLSearchParams({ id: el.dataset.id, displayName: value })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    el.textContent = data.displayName;
+                    el.dataset.original = data.displayName;
+                    clearError();
+                    flash(el, 'save-ok');
+                } else {
+                    el.textContent = original;
+                    showError(data.error || 'Could not rename role.');
+                    flash(el, 'save-err');
+                }
+            } catch {
+                el.textContent = original;
+                showError('Could not reach the server. Try again.');
+                flash(el, 'save-err');
+            }
+        }
+
+        function beginEdit(el) {
+            el.classList.add('editing');
+            el.setAttribute('contenteditable', 'true');
+            el.focus();
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+
+        document.querySelectorAll('.role-name').forEach(el => {
+            el.addEventListener('dblclick', () => beginEdit(el));
+            el.addEventListener('keydown', e => {
+                if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+                else if (e.key === 'Escape') { e.preventDefault(); el.textContent = el.dataset.original; el.blur(); }
+            });
+            el.addEventListener('blur', () => {
+                if (!el.classList.contains('editing')) return;
+                el.classList.remove('editing');
+                el.removeAttribute('contenteditable');
+                save(el);
+            });
+        });
+    })();
+</script>
+}
