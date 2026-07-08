@@ -29,7 +29,7 @@
                         @if (User.Identity?.IsAuthenticated == true)
                         {
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Timesheet" asp-action="Index">My Timesheet</a>
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Timesheet" asp-action="Index">Timesheet</a>
                             </li>
                         }
                         @if (User.IsInRole(ProjectTango.Domain.RoleNames.Admin) || User.IsInRole(ProjectTango.Domain.RoleNames.OperationsManager) || User.IsInRole(ProjectTango.Domain.RoleNames.ProjectManager))
