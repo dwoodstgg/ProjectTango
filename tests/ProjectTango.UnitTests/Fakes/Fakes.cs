@@ -1,7 +1,10 @@
+using ProjectTango.Application.Clients;
 using ProjectTango.Application.Common;
 using ProjectTango.Application.Employees;
+using ProjectTango.Application.Projects;
 using ProjectTango.Application.Roles;
 using ProjectTango.Domain.Entities;
+using ProjectTango.Domain.Enums;
 
 namespace ProjectTango.UnitTests.Fakes;
 
@@ -110,5 +113,60 @@ public sealed class FakeEmployeeRepository(FakeRoleRepository roles) : IEmployee
         var count = Employees.Count(e =>
             e.IsActive && RoleIdsByEmployee.GetValueOrDefault(e.Id, []).Overlaps(adminRoleIds));
         return Task.FromResult(count);
+    }
+}
+
+public sealed class FakeClientRepository : IClientRepository
+{
+    public List<Client> Clients { get; } = [];
+
+    public Task<IReadOnlyList<Client>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Client>>(Clients.ToList());
+
+    public Task<Client?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Clients.FirstOrDefault(c => c.Id == id));
+
+    public Task AddAsync(Client client, CancellationToken cancellationToken = default)
+    {
+        Clients.Add(client);
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateAsync(Client client, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task SetActiveAsync(Guid clientId, bool isActive, CancellationToken cancellationToken = default)
+    {
+        Clients.Single(c => c.Id == clientId).IsActive = isActive;
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class FakeProjectRepository : IProjectRepository
+{
+    public List<Project> Projects { get; } = [];
+
+    public Task<IReadOnlyList<ProjectSummary>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ProjectSummary>>(
+            Projects.Select(p => new ProjectSummary(p, "client", "pm")).ToList());
+
+    public Task<Project?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Projects.FirstOrDefault(p => p.Id == id));
+
+    public Task<Project?> GetByCodeAsync(string code, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Projects.FirstOrDefault(p =>
+            string.Equals(p.Code, code, StringComparison.OrdinalIgnoreCase)));
+
+    public Task AddAsync(Project project, CancellationToken cancellationToken = default)
+    {
+        Projects.Add(project);
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateAsync(Project project, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task SetStatusAsync(Guid projectId, ProjectStatus status, CancellationToken cancellationToken = default)
+    {
+        Projects.Single(p => p.Id == projectId).Status = status;
+        return Task.CompletedTask;
     }
 }

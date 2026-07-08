@@ -1,0 +1,21 @@
+@model ProjectFormViewModel
+@{
+    ViewData["Title"] = "New Project";
+}
+
+<h1>New Project</h1>
+<p class="text-muted">Projects start in <strong>Draft</strong>; activate from the manage page when ready for time entry.</p>
+
+<div class="row">
+    <div class="col-md-6">
+        <form asp-action="Create">
+            <partial name="_Form" model="Model" />
+            <button type="submit" class="btn btn-primary">Create</button>
+            <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

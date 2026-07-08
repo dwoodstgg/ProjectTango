@@ -1,0 +1,38 @@
+@model ClientFormViewModel
+
+<div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+<div class="mb-3">
+    <label asp-for="Name" class="form-label"></label>
+    <input asp-for="Name" class="form-control" />
+    <span asp-validation-for="Name" class="text-danger"></span>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-3">
+        <label asp-for="BillingContactName" class="form-label"></label>
+        <input asp-for="BillingContactName" class="form-control" />
+    </div>
+    <div class="col-md-6 mb-3">
+        <label asp-for="BillingContactEmail" class="form-label"></label>
+        <input asp-for="BillingContactEmail" class="form-control" />
+        <span asp-validation-for="BillingContactEmail" class="text-danger"></span>
+    </div>
+</div>
+
+<div class="mb-3">
+    <label asp-for="PaymentTermsDays" class="form-label"></label>
+    <input asp-for="PaymentTermsDays" class="form-control" style="max-width: 10rem" />
+    <span asp-validation-for="PaymentTermsDays" class="text-danger"></span>
+</div>
+
+<fieldset class="mb-3">
+    <legend class="fs-6 text-muted">Billing address</legend>
+    <div class="mb-2"><input asp-for="AddressLine1" class="form-control" placeholder="Address line 1" /></div>
+    <div class="mb-2"><input asp-for="AddressLine2" class="form-control" placeholder="Address line 2" /></div>
+    <div class="row">
+        <div class="col-md-5 mb-2"><input asp-for="City" class="form-control" placeholder="City" /></div>
+        <div class="col-md-3 mb-2"><input asp-for="State" class="form-control" placeholder="State" /></div>
+        <div class="col-md-4 mb-2"><input asp-for="PostalCode" class="form-control" placeholder="Postal code" /></div>
+    </div>
+</fieldset>

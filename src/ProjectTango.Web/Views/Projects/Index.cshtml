@@ -1,0 +1,60 @@
+@using ProjectTango.Application.Projects
+@using ProjectTango.Domain.Enums
+@model IReadOnlyList<ProjectSummary>
+@{
+    ViewData["Title"] = "Projects";
+
+    static string StatusBadge(ProjectStatus status) => status switch
+    {
+        ProjectStatus.Active => "text-bg-success",
+        ProjectStatus.OnHold => "text-bg-warning",
+        ProjectStatus.Draft => "text-bg-secondary",
+        ProjectStatus.Closed => "text-bg-dark",
+        _ => "text-bg-light",
+    };
+
+    static string StatusLabel(ProjectStatus status) =>
+        status == ProjectStatus.OnHold ? "On hold" : status.ToString();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="mb-0">Projects</h1>
+    <a class="btn btn-primary" asp-action="Create">New project</a>
+</div>
+
+<table class="table table-hover align-middle">
+    <thead>
+        <tr>
+            <th>Code</th>
+            <th>Name</th>
+            <th>Client</th>
+            <th>Project manager</th>
+            <th>Dates</th>
+            <th>Status</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            var p = item.Project;
+            <tr>
+                <td><code>@p.Code</code></td>
+                <td>@p.Name</td>
+                <td>@item.ClientName</td>
+                <td>@item.ProjectManagerName</td>
+                <td class="text-nowrap">
+                    @(p.StartDate?.ToString("yyyy-MM-dd") ?? "—")
+                    @if (p.EndDate is not null)
+                    {
+                        <text>→ @p.EndDate?.ToString("yyyy-MM-dd")</text>
+                    }
+                </td>
+                <td><span class="badge @StatusBadge(p.Status)">@StatusLabel(p.Status)</span></td>
+                <td class="text-end">
+                    <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@p.Id">Manage</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

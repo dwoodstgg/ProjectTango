@@ -17,7 +17,7 @@ public sealed class EmployeeRepositoryTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        DefaultTypeMap.MatchNamesWithUnderscores = true;
+        DapperConfig.Apply();
         await _postgres.StartAsync();
         DatabaseMigrator.MigrateToLatest(_postgres.GetConnectionString());
         _dataSource = NpgsqlDataSource.Create(_postgres.GetConnectionString());

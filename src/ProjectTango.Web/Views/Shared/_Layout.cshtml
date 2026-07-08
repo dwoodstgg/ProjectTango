@@ -26,8 +26,17 @@
                         <li class="nav-item">
                             <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
                         </li>
+                        @if (User.IsInRole(ProjectTango.Domain.RoleNames.Admin) || User.IsInRole(ProjectTango.Domain.RoleNames.OperationsManager) || User.IsInRole(ProjectTango.Domain.RoleNames.ProjectManager))
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Projects" asp-action="Index">Projects</a>
+                            </li>
+                        }
                         @if (User.IsInRole(ProjectTango.Domain.RoleNames.Admin) || User.IsInRole(ProjectTango.Domain.RoleNames.OperationsManager))
                         {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Clients" asp-action="Index">Clients</a>
+                            </li>
                             <li class="nav-item">
                                 <a class="nav-link text-dark" asp-area="" asp-controller="Employees" asp-action="Index">Employees</a>
                             </li>

@@ -1,0 +1,43 @@
+@model ProjectFormViewModel
+
+<div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+<div class="mb-3">
+    <label asp-for="ClientId" class="form-label"></label>
+    <select asp-for="ClientId" asp-items="Model.ClientOptions" class="form-select">
+        <option value="">— select client —</option>
+    </select>
+    <span asp-validation-for="ClientId" class="text-danger"></span>
+</div>
+
+<div class="mb-3">
+    <label asp-for="Name" class="form-label"></label>
+    <input asp-for="Name" class="form-control" />
+    <span asp-validation-for="Name" class="text-danger"></span>
+</div>
+
+<div class="mb-3">
+    <label asp-for="Code" class="form-label"></label>
+    <input asp-for="Code" class="form-control text-uppercase" style="max-width: 14rem" placeholder="GEO-014" />
+    <span asp-validation-for="Code" class="text-danger"></span>
+</div>
+
+<div class="mb-3">
+    <label asp-for="ProjectManagerId" class="form-label"></label>
+    <select asp-for="ProjectManagerId" asp-items="Model.ManagerOptions" class="form-select">
+        <option value="">— select project manager —</option>
+    </select>
+    <span asp-validation-for="ProjectManagerId" class="text-danger"></span>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-3">
+        <label asp-for="StartDate" class="form-label"></label>
+        <input asp-for="StartDate" class="form-control" />
+    </div>
+    <div class="col-md-6 mb-3">
+        <label asp-for="EndDate" class="form-label"></label>
+        <input asp-for="EndDate" class="form-control" />
+        <span asp-validation-for="EndDate" class="text-danger"></span>
+    </div>
+</div>

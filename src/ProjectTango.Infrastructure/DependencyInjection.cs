@@ -1,10 +1,12 @@
-using Dapper;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using ProjectTango.Application.Clients;
 using ProjectTango.Application.Common;
 using ProjectTango.Application.Employees;
+using ProjectTango.Application.Projects;
 using ProjectTango.Application.Roles;
+using ProjectTango.Infrastructure.Persistence;
 using ProjectTango.Infrastructure.Persistence.Repositories;
 
 namespace ProjectTango.Infrastructure;
@@ -13,8 +15,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        // Dapper maps snake_case columns (is_billable) onto PascalCase properties (IsBillable).
-        DefaultTypeMap.MatchNamesWithUnderscores = true;
+        DapperConfig.Apply();
 
         var connectionString = configuration.GetConnectionString("ProjectTango")
             ?? throw new InvalidOperationException("Connection string 'ProjectTango' is missing.");
@@ -23,6 +24,8 @@ public static class DependencyInjection
 
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+        services.AddScoped<IClientRepository, ClientRepository>();
+        services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<IAuditLog, AuditLogRepository>();
 
         return services;

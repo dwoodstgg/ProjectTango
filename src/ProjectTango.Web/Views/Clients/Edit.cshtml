@@ -1,0 +1,28 @@
+@using ProjectTango.Domain.Entities
+@model ClientFormViewModel
+@{
+    var client = (Client)ViewBag.Client;
+    ViewData["Title"] = $"Edit {client.Name}";
+}
+
+<h1>
+    Edit @client.Name
+    @if (client.IsInternal)
+    {
+        <span class="badge text-bg-info fs-6 align-middle" title="Internal client — never invoiced">internal</span>
+    }
+</h1>
+
+<div class="row">
+    <div class="col-md-6">
+        <form asp-action="Edit" asp-route-id="@client.Id">
+            <partial name="_Form" model="Model" />
+            <button type="submit" class="btn btn-primary">Save</button>
+            <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

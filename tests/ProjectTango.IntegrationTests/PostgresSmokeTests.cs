@@ -15,7 +15,7 @@ public sealed class PostgresSmokeTests : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        DefaultTypeMap.MatchNamesWithUnderscores = true;
+        DapperConfig.Apply();
         return _postgres.StartAsync();
     }
 

@@ -1,0 +1,67 @@
+@using ProjectTango.Domain.Entities
+@using ProjectTango.Domain.Enums
+@model ProjectFormViewModel
+@{
+    var project = (Project)ViewBag.Project;
+    ViewData["Title"] = $"{project.Code} — {project.Name}";
+}
+
+@if (TempData["Error"] is string error)
+{
+    <div class="alert alert-danger alert-dismissible" role="alert">
+        @error
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="mb-0"><code>@project.Code</code> @project.Name</h1>
+    <div>
+        @if (project.Status == ProjectStatus.Draft)
+        {
+            <form asp-action="SetStatus" asp-route-id="@project.Id" method="post" class="d-inline">
+                <input type="hidden" name="status" value="@ProjectStatus.Active" />
+                <button type="submit" class="btn btn-success">Activate</button>
+            </form>
+        }
+        else if (project.Status == ProjectStatus.Active)
+        {
+            <form asp-action="SetStatus" asp-route-id="@project.Id" method="post" class="d-inline">
+                <input type="hidden" name="status" value="@ProjectStatus.OnHold" />
+                <button type="submit" class="btn btn-warning">Put on hold</button>
+            </form>
+        }
+        else if (project.Status == ProjectStatus.OnHold)
+        {
+            <form asp-action="SetStatus" asp-route-id="@project.Id" method="post" class="d-inline">
+                <input type="hidden" name="status" value="@ProjectStatus.Active" />
+                <button type="submit" class="btn btn-success">Resume</button>
+            </form>
+        }
+    </div>
+</div>
+
+<p>
+    Status:
+    <span class="badge @(project.Status switch {
+        ProjectStatus.Active => "text-bg-success",
+        ProjectStatus.OnHold => "text-bg-warning",
+        _ => "text-bg-secondary" })">
+        @(project.Status == ProjectStatus.OnHold ? "On hold" : project.Status.ToString())
+    </span>
+    <span class="text-muted ms-2">Close-out and archiving arrive in Phase 2.</span>
+</p>
+
+<div class="row">
+    <div class="col-md-6">
+        <form asp-action="Edit" asp-route-id="@project.Id">
+            <partial name="_Form" model="Model" />
+            <button type="submit" class="btn btn-primary">Save</button>
+            <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
