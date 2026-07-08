@@ -13,12 +13,8 @@ public class TimesheetPeriodService(
     ITimesheetPeriodRepository periods,
     IAuditLog audit)
 {
-    public async Task<IReadOnlyList<TimesheetPeriod>> ListForMonthAsync(int year, int month, CancellationToken cancellationToken = default)
-    {
-        var from = new DateOnly(year, month, 1);
-        var to = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
-        return await periods.GetInRangeAsync(from, to, cancellationToken);
-    }
+    public async Task<IReadOnlyList<TimesheetPeriod>> ListInRangeAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default) =>
+        await periods.GetInRangeAsync(from, to, cancellationToken);
 
     /// <summary>Is the window covering <paramref name="date"/> closed?</summary>
     public async Task<bool> IsClosedAsync(DateOnly date, CancellationToken cancellationToken = default)

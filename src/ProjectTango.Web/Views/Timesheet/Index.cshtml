@@ -7,14 +7,23 @@
 <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
     <div class="d-flex align-items-center gap-2">
         <h1 class="mb-0 h3">My Timesheet</h1>
-        <span class="text-muted">@Model.MonthLabel</span>
+        <span class="text-muted">@Model.RangeLabel</span>
     </div>
-    <div class="btn-group" role="group" aria-label="Month navigation">
-        <a class="btn btn-outline-secondary btn-sm" asp-action="Index"
-           asp-route-year="@Model.PrevMonth.Year" asp-route-month="@Model.PrevMonth.Month">&laquo; Prev</a>
-        <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Today</a>
-        <a class="btn btn-outline-secondary btn-sm" asp-action="Index"
-           asp-route-year="@Model.NextMonth.Year" asp-route-month="@Model.NextMonth.Month">Next &raquo;</a>
+    <div class="d-flex gap-2">
+        <div class="btn-group" role="group" aria-label="View">
+            <a class="btn btn-sm @(Model.IsWeek ? "btn-primary" : "btn-outline-secondary")"
+               asp-action="Index" asp-route-view="week" asp-route-anchor="@Model.CurrentAnchor.ToString("yyyy-MM-dd")">Week</a>
+            <a class="btn btn-sm @(Model.IsWeek ? "btn-outline-secondary" : "btn-primary")"
+               asp-action="Index" asp-route-view="month" asp-route-anchor="@Model.CurrentAnchor.ToString("yyyy-MM-dd")">Month</a>
+        </div>
+        <div class="btn-group" role="group" aria-label="Navigation">
+            <a class="btn btn-outline-secondary btn-sm" asp-action="Index"
+               asp-route-view="@Model.ViewMode" asp-route-anchor="@Model.PrevAnchor.ToString("yyyy-MM-dd")">&laquo; Prev</a>
+            <a class="btn btn-outline-secondary btn-sm" asp-action="Index"
+               asp-route-view="@Model.ViewMode" asp-route-anchor="@Model.TodayAnchor.ToString("yyyy-MM-dd")">@(Model.IsWeek ? "This week" : "This month")</a>
+            <a class="btn btn-outline-secondary btn-sm" asp-action="Index"
+               asp-route-view="@Model.ViewMode" asp-route-anchor="@Model.NextAnchor.ToString("yyyy-MM-dd")">Next &raquo;</a>
+        </div>
     </div>
 </div>
 
@@ -33,38 +42,10 @@
     return;
 }
 
-<div class="d-flex flex-wrap gap-2 mb-3">
-    @foreach (var w in Model.Windows)
-    {
-        <div class="d-flex align-items-center gap-2 border rounded px-3 py-2 bg-white">
-            <span class="small text-muted">@w.Label</span>
-            @if (w.Closed)
-            {
-                <span class="badge text-bg-secondary">closed</span>
-            }
-            else
-            {
-                <span class="badge text-bg-success-subtle text-success-emphasis border border-success-subtle">open</span>
-            }
-            @if (Model.CanManageWindows)
-            {
-                <form asp-action="@(w.Closed ? "ReopenWindow" : "CloseWindow")" method="post" class="m-0">
-                    <input type="hidden" name="periodStart" value="@w.Start.ToString("yyyy-MM-dd")" />
-                    <input type="hidden" name="year" value="@Model.Year" />
-                    <input type="hidden" name="month" value="@Model.Month" />
-                    <button type="submit" class="btn btn-sm @(w.Closed ? "btn-outline-primary" : "btn-outline-secondary")">
-                        @(w.Closed ? "Reopen" : "Close")
-                    </button>
-                </form>
-            }
-        </div>
-    }
-</div>
-
 @if (Model.Rows.Count == 0)
 {
     <div class="alert alert-info">
-        You have no project assignments active in @Model.MonthLabel. A project manager assigns you
+        You have no project assignments active in @Model.RangeLabel. A project manager assigns you
         to a project before you can log time against it.
     </div>
     return;
@@ -74,8 +55,7 @@
 
 <p class="text-muted small mb-2">
     Enter hours in quarter-hour steps. Each row bills under the role selected on its left — change it
-    before editing a day if the work was a different kind. Entries save as you go; a closed window or an
-    approved entry is read-only.
+    before editing a day if the work was a different kind. Entries save as you go; an approved entry is read-only.
 </p>
 
 <div class="ts-wrap">
@@ -107,7 +87,7 @@
                     </td>
                     @foreach (var d in Model.Days)
                     {
-                        row.Cells.TryGetValue(d.Day, out var cell);
+                        row.Cells.TryGetValue(d.DayNumber, out var cell);
                         var status = cell?.Status ?? "open";
                         var editable = !d.Locked && status == "open";
                         <td class="ts-cell @(d.IsWeekend ? "ts-weekend" : "") @(status == "approved" || status == "invoiced" ? "approved" : "")"

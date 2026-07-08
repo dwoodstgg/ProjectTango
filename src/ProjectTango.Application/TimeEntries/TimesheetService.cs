@@ -26,11 +26,9 @@ public class TimesheetService(
     ITimeEntryRepository entries,
     IRoleRepository roles)
 {
-    public async Task<MyMonthTimesheet> GetMyMonthAsync(int year, int month, CancellationToken cancellationToken = default)
+    public async Task<MyMonthTimesheet> GetMyRangeAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
     {
         var me = currentUser.EmployeeId ?? throw new UnauthorizedAccessException("No signed-in employee.");
-        var from = new DateOnly(year, month, 1);
-        var to = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
 
         var monthEntries = await entries.GetForEmployeeRangeAsync(me, from, to, cancellationToken);
         var projectsWithEntries = monthEntries.Select(e => e.ProjectId).ToHashSet();
