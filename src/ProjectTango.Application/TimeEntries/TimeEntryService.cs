@@ -66,6 +66,15 @@ public class TimeEntryService(
             ?? throw new DomainException("Unknown client.");
         var isBillable = !client.IsInternal;
 
+        // Billable time must carry a work description (it lands on the invoice). Internal
+        // leave/admin time is exempt.
+        if (isBillable && string.IsNullOrWhiteSpace(notes))
+        {
+            throw new DescriptionRequiredException();
+        }
+
+        notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+
         if (existing is not null)
         {
             existing.HoursWorked = hours;

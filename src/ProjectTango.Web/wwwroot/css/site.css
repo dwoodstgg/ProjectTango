@@ -256,3 +256,40 @@ body {
 .ts-cell.save-ok input { background: #d1e7dd; transition: background .5s; }
 .ts-cell.save-err input { background: #f8d7da; }
 .ts-cell.approved input { color: #0f5132; font-weight: 600; background: #f0f9f4; }
+
+/* Per-cell description affordance: faint pencil on hover, solid blue dot when a note
+   exists. Overlays the cell's top-right corner without disturbing the hours input. */
+.ts-cell { position: relative; }
+.ts-note {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  line-height: 14px;
+  font-size: 9px;
+  color: #ced4da;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .1s;
+}
+.ts-cell:hover .ts-note { opacity: 1; }
+.ts-note.has-note { opacity: 1; color: #0d6efd; font-size: 11px; }
+.ts-note:hover { color: #0d6efd; }
+
+/* Floating description editor. */
+.ts-pop {
+  position: absolute;
+  z-index: 1050;
+  width: 20rem;
+  max-width: calc(100vw - 1rem);
+  background: #fff;
+  border: 1px solid #d5d9de;
+  border-radius: .5rem;
+  box-shadow: 0 8px 28px rgba(16, 24, 40, .18);
+  padding: .85rem;
+}
+.ts-pop-title { font-weight: 600; color: #1f2933; margin-bottom: .5rem; font-size: .85rem; }

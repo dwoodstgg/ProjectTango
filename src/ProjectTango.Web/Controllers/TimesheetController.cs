@@ -117,7 +117,11 @@ public class TimesheetController(
         try
         {
             var entry = await timeEntries.SaveHoursAsync(projectId, date, hours, billingRoleId, notes, cancellationToken: cancellationToken);
-            return Json(new { ok = true, hours = entry?.HoursWorked ?? 0m, cleared = entry is null });
+            return Json(new { ok = true, hours = entry?.HoursWorked ?? 0m, notes = entry?.Notes ?? "", cleared = entry is null });
+        }
+        catch (DescriptionRequiredException ex)
+        {
+            return Json(new { ok = false, needsDescription = true, error = ex.Message });
         }
         catch (Exception ex) when (ex is DomainException or UnauthorizedAccessException)
         {

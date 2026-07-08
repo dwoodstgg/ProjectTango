@@ -71,7 +71,7 @@ public class TimeEntryServiceTests
     [Fact]
     public async Task Save_zero_hours_clears_the_cell()
     {
-        await _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, null);
+        await _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, "work");
         var result = await _service.SaveHoursAsync(_project.Id, Day, 0m, _developer.Id, null);
 
         Assert.Null(result);
@@ -81,7 +81,7 @@ public class TimeEntryServiceTests
     [Fact]
     public async Task Save_updates_the_existing_open_entry_in_place()
     {
-        await _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, null);
+        await _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, "work");
         await _service.SaveHoursAsync(_project.Id, Day, 7.25m, _developer.Id, "more");
 
         var stored = Assert.Single(_entries.Entries);
@@ -149,7 +149,19 @@ public class TimeEntryServiceTests
     }
 
     [Fact]
-    public async Task Internal_client_entries_are_non_billable()
+    public async Task Billable_time_requires_a_description()
+    {
+        await Assert.ThrowsAsync<DescriptionRequiredException>(() =>
+            _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, null));
+
+        await Assert.ThrowsAsync<DescriptionRequiredException>(() =>
+            _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, "   "));
+
+        Assert.Empty(_entries.Entries);
+    }
+
+    [Fact]
+    public async Task Internal_client_entries_are_non_billable_and_need_no_description()
     {
         _client.IsInternal = true;
 
@@ -157,12 +169,13 @@ public class TimeEntryServiceTests
 
         Assert.NotNull(entry);
         Assert.False(entry!.IsBillable);
+        Assert.Null(entry.Notes);
     }
 
     [Fact]
     public async Task An_approved_entry_cannot_be_edited_by_the_owner()
     {
-        await _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, null);
+        await _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, "work");
         _entries.Entries.Single().Status = TimeEntryStatus.Approved;
 
         var ex = await Assert.ThrowsAsync<DomainException>(() =>

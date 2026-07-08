@@ -57,7 +57,8 @@
 
 <p class="text-muted small mb-2">
     Enter hours in quarter-hour steps. Each row bills under the role selected on its left — change it
-    before editing a day if the work was a different kind. Entries save as you go; an approved entry is read-only.
+    before editing a day if the work was a different kind. Billable time needs a work description —
+    you'll be prompted for one as you enter hours. Entries save as you go; an approved entry is read-only.
 </p>
 
 <div class="ts-wrap">
@@ -98,7 +99,14 @@
                                    value="@(cell is null ? "" : Fmt(cell.Hours))"
                                    title="@(cell?.Notes)"
                                    data-role="@(cell?.BillingRoleId)"
+                                   data-notes="@(cell?.Notes)"
                                    @(editable ? "" : "disabled")/>
+                            @if (editable)
+                            {
+                                <button type="button" tabindex="-1"
+                                        class="ts-note @(string.IsNullOrWhiteSpace(cell?.Notes) ? "" : "has-note")"
+                                        title="@(cell?.Notes)" aria-label="Edit description">@(string.IsNullOrWhiteSpace(cell?.Notes) ? "✎" : "●")</button>
+                            }
                         </td>
                     }
                     <td class="ts-total ts-row-total">0</td>
@@ -116,6 +124,30 @@
             </tr>
         </tfoot>
     </table>
+</div>
+
+<div id="ts-pop" class="ts-pop d-none" role="dialog" aria-label="Time entry">
+    <div class="ts-pop-title" id="ts-pop-title"></div>
+    <label class="form-label small mb-1">Billing role</label>
+    <select id="ts-pop-role" class="form-select form-select-sm mb-2">
+        @foreach (var opt in Model.BillableRoleOptions)
+        {
+            <option value="@opt.Value">@opt.Text</option>
+        }
+    </select>
+    <div class="row g-2 mb-2">
+        <div class="col-5">
+            <label class="form-label small mb-1">Hours</label>
+            <input id="ts-pop-hours" type="number" min="0" max="24" step="0.25" class="form-control form-control-sm" />
+        </div>
+    </div>
+    <label class="form-label small mb-1">Description</label>
+    <textarea id="ts-pop-notes" class="form-control form-control-sm" rows="3" placeholder="What was worked on"></textarea>
+    <div id="ts-pop-err" class="text-danger small mt-1 d-none"></div>
+    <div class="d-flex justify-content-end gap-2 mt-2">
+        <button type="button" id="ts-pop-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button type="button" id="ts-pop-save" class="btn btn-sm btn-primary">Save</button>
+    </div>
 </div>
 
 @section Scripts {
@@ -159,46 +191,126 @@
             if (cls === 'save-ok') setTimeout(() => cell.classList.remove('save-ok'), 700);
         }
 
-        async function save(input) {
-            const cell = input.closest('.ts-cell');
-            const row = input.closest('tr');
-            const projectId = row.dataset.project;
-            const date = cell.dataset.date;
-            const billingRoleId = row.querySelector('.ts-role').value;
-            const hours = num(input.value);
+        function rowRole(cell) {
+            const input = cell.querySelector('.ts-hours');
+            return input.dataset.role || cell.closest('tr').querySelector('.ts-role').value;
+        }
 
+        // Reflects a saved entry back into the cell: hours value, stored notes/role, and the
+        // note indicator (● has description, ✎ none).
+        function applySaved(cell, data, roleId, notes) {
+            const input = cell.querySelector('.ts-hours');
+            input.value = data.cleared ? '' : show(data.hours, '');
+            input.dataset.prev = input.value;
+            input.dataset.role = roleId;
+            input.dataset.notes = data.cleared ? '' : (data.notes || '');
+            input.title = input.dataset.notes;
+            const note = cell.querySelector('.ts-note');
+            if (note) {
+                const has = !!input.dataset.notes;
+                note.classList.toggle('has-note', has);
+                note.textContent = has ? '●' : '✎';
+                note.title = input.dataset.notes;
+            }
+            recalc();
+        }
+
+        // Posts a cell. Returns the parsed response; callers decide how to react (a missing
+        // billable description comes back as {ok:false, needsDescription:true}).
+        async function post(cell, { hours, roleId, notes }) {
             flash(cell, 'saving');
             try {
                 const res = await fetch(saveUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'RequestVerificationToken': token },
-                    body: new URLSearchParams({ projectId, date, hours, billingRoleId, notes: '' })
+                    body: new URLSearchParams({
+                        projectId: cell.closest('tr').dataset.project,
+                        date: cell.dataset.date, hours, billingRoleId: roleId, notes: notes || ''
+                    })
                 });
                 const data = await res.json();
-                if (data.ok) {
-                    input.value = data.cleared ? '' : show(data.hours, '');
-                    input.dataset.role = billingRoleId;
-                    errorBox.classList.add('d-none');
-                    flash(cell, 'save-ok');
-                } else {
-                    errorBox.textContent = data.error || 'Could not save entry.';
-                    errorBox.classList.remove('d-none');
-                    flash(cell, 'save-err');
-                }
+                if (data.ok) { errorBox.classList.add('d-none'); flash(cell, data.cleared ? null : 'save-ok'); }
+                else if (!data.needsDescription) { errorBox.textContent = data.error || 'Could not save entry.'; errorBox.classList.remove('d-none'); flash(cell, 'save-err'); }
+                return data;
             } catch {
                 errorBox.textContent = 'Could not reach the server. Try again.';
                 errorBox.classList.remove('d-none');
                 flash(cell, 'save-err');
+                return { ok: false };
             }
-            recalc();
         }
 
-        grid.querySelectorAll('.ts-hours').forEach(inp => {
-            inp.dataset.prev = inp.value;
-            inp.addEventListener('change', () => {
-                if (inp.value === inp.dataset.prev) return;
-                inp.dataset.prev = inp.value;
-                save(inp);
+        // ---- Description popover -------------------------------------------------
+        const pop = document.getElementById('ts-pop');
+        const popTitle = document.getElementById('ts-pop-title');
+        const popRole = document.getElementById('ts-pop-role');
+        const popHours = document.getElementById('ts-pop-hours');
+        const popNotes = document.getElementById('ts-pop-notes');
+        const popErr = document.getElementById('ts-pop-err');
+        let popCell = null;
+
+        function openPop(cell, prefillHours) {
+            popCell = cell;
+            const input = cell.querySelector('.ts-hours');
+            const tr = cell.closest('tr');
+            popTitle.textContent = tr.querySelector('.ts-code').textContent + ' · ' + cell.dataset.date;
+            popRole.value = rowRole(cell);
+            popHours.value = prefillHours != null ? prefillHours : input.value;
+            popNotes.value = input.dataset.notes || '';
+            popErr.classList.add('d-none');
+
+            const r = cell.getBoundingClientRect();
+            pop.classList.remove('d-none');
+            const w = pop.offsetWidth, h = pop.offsetHeight;
+            let left = window.scrollX + Math.min(r.left, window.innerWidth - w - 12);
+            let top = window.scrollY + r.bottom + 4;
+            if (r.bottom + h + 8 > window.innerHeight) top = window.scrollY + r.top - h - 4;
+            pop.style.left = Math.max(window.scrollX + 8, left) + 'px';
+            pop.style.top = Math.max(window.scrollY + 8, top) + 'px';
+            popNotes.focus();
+        }
+
+        function closePop(revert) {
+            if (popCell && revert) {
+                const input = popCell.querySelector('.ts-hours');
+                input.value = input.dataset.prev || '';
+                recalc();
+            }
+            pop.classList.add('d-none');
+            popCell = null;
+        }
+
+        document.getElementById('ts-pop-cancel').addEventListener('click', () => closePop(true));
+
+        document.getElementById('ts-pop-save').addEventListener('click', async () => {
+            if (!popCell) return;
+            const roleId = popRole.value;
+            const data = await post(popCell, { hours: num(popHours.value), roleId, notes: popNotes.value });
+            if (data.ok) { applySaved(popCell, data, roleId, popNotes.value); closePop(false); }
+            else if (data.needsDescription) { popErr.textContent = data.error; popErr.classList.remove('d-none'); popNotes.focus(); }
+            else { closePop(true); }
+        });
+
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pop.classList.contains('d-none')) closePop(true); });
+        document.addEventListener('mousedown', e => {
+            if (!pop.classList.contains('d-none') && !pop.contains(e.target) && !e.target.classList.contains('ts-note')) closePop(true);
+        });
+
+        grid.querySelectorAll('.ts-note').forEach(btn =>
+            btn.addEventListener('click', () => openPop(btn.closest('.ts-cell'))));
+
+        // ---- Inline hours entry --------------------------------------------------
+        grid.querySelectorAll('.ts-hours').forEach(input => {
+            input.dataset.prev = input.value;
+            input.addEventListener('change', async () => {
+                if (input.value === input.dataset.prev) return;
+                const cell = input.closest('.ts-cell');
+                const hours = num(input.value);
+                const roleId = rowRole(cell);
+                const data = await post(cell, { hours, roleId, notes: input.dataset.notes });
+                if (data.ok) applySaved(cell, data, roleId, input.dataset.notes);
+                else if (data.needsDescription) openPop(cell, hours);      // collect the required description
+                else input.value = input.dataset.prev;                     // other error: revert
             });
         });
 
