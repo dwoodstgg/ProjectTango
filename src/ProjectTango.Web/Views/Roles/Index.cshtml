@@ -1,0 +1,64 @@
+@using ProjectTango.Domain.Entities
+@model IReadOnlyList<Role>
+@{
+    ViewData["Title"] = "Roles";
+}
+
+@if (TempData["Error"] is string error)
+{
+    <div class="alert alert-danger alert-dismissible" role="alert">
+        @error
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<h1 class="mb-1">Roles</h1>
+<p class="text-muted">
+    Rename a role's label here. Roles double as billing roles on rate cards, so the name you
+    choose shows on timesheets and invoices. Permissions are keyed internally and are never
+    affected by renaming.
+</p>
+
+<div class="card shadow-sm" style="max-width: 720px">
+    <div class="card-body p-0">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-3">Role</th>
+                    <th>Attributes</th>
+                    <th class="text-end pe-3">Rename</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var role in Model)
+                {
+                    <tr>
+                        <td class="ps-3 fw-medium">@role.DisplayName</td>
+                        <td>
+                            @if (role.IsSystemAdmin)
+                            {
+                                <span class="badge text-bg-danger">system admin</span>
+                            }
+                            @if (role.IsBillable)
+                            {
+                                <span class="badge text-bg-secondary">billable</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-light text-muted">non-billable</span>
+                            }
+                        </td>
+                        <td class="pe-3">
+                            <form asp-action="Rename" method="post" class="d-flex gap-2 justify-content-end">
+                                <input type="hidden" name="id" value="@role.Id" />
+                                <input type="text" name="displayName" value="@role.DisplayName"
+                                       class="form-control form-control-sm" style="max-width: 14rem" required />
+                                <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

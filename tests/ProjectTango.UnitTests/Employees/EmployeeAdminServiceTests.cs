@@ -48,6 +48,31 @@ public class EmployeeAdminServiceTests
     }
 
     [Fact]
+    public async Task UpdateProfile_changes_name_and_type_and_audits()
+    {
+        await _service.UpdateProfileAsync(_don.Id, "  Donald Woods ", EmploymentType.Subcontractor);
+
+        Assert.Equal("Donald Woods", _don.DisplayName);
+        Assert.Equal(EmploymentType.Subcontractor, _don.EmploymentType);
+        Assert.Single(_audit.Events, e => e.Action == "employee.updated" && e.EntityId == _don.Id);
+    }
+
+    [Fact]
+    public async Task UpdateProfile_rejects_empty_name()
+    {
+        await Assert.ThrowsAsync<DomainException>(() =>
+            _service.UpdateProfileAsync(_don.Id, "   ", EmploymentType.Employee));
+    }
+
+    [Fact]
+    public async Task UpdateProfile_noop_when_unchanged_writes_no_audit()
+    {
+        await _service.UpdateProfileAsync(_don.Id, _don.DisplayName, _don.EmploymentType);
+
+        Assert.DoesNotContain(_audit.Events, e => e.Action == "employee.updated");
+    }
+
+    [Fact]
     public async Task Create_trims_input_and_writes_audit()
     {
         var employee = await _service.CreateAsync("  new@thegeospatialgroup.com ", " New Person ", EmploymentType.Subcontractor);

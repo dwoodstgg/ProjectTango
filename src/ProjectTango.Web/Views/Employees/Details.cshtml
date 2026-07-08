@@ -2,7 +2,6 @@
 @model EmployeeDetailsViewModel
 @{
     var e = Model.Summary.Employee;
-    var held = Model.Summary.RoleNames;
     ViewData["Title"] = e.DisplayName;
 }
 
@@ -24,66 +23,107 @@
     </form>
 </div>
 
-<dl class="row">
-    <dt class="col-sm-3">Email</dt>
-    <dd class="col-sm-9">@e.Email</dd>
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light fw-semibold">Profile</div>
+            <div class="card-body">
+                <form asp-action="UpdateProfile" asp-route-id="@e.Id">
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
-    <dt class="col-sm-3">Employment type</dt>
-    <dd class="col-sm-9">@(e.EmploymentType == EmploymentType.Subcontractor ? "1099 Subcontractor" : "Employee (W-2)")</dd>
+                    <div class="mb-3">
+                        <label asp-for="Profile.DisplayName" class="form-label"></label>
+                        <input asp-for="Profile.DisplayName" class="form-control" />
+                        <span asp-validation-for="Profile.DisplayName" class="text-danger"></span>
+                    </div>
 
-    <dt class="col-sm-3">Status</dt>
-    <dd class="col-sm-9">
-        <span class="badge @(e.IsActive ? "text-bg-success" : "text-bg-secondary")">@(e.IsActive ? "Active" : "Inactive")</span>
-    </dd>
+                    <div class="mb-3">
+                        <label asp-for="Profile.EmploymentType" class="form-label"></label>
+                        <select asp-for="Profile.EmploymentType" class="form-select">
+                            <option value="@EmploymentType.Employee">Employee (W-2)</option>
+                            <option value="@EmploymentType.Subcontractor">Subcontractor (1099)</option>
+                        </select>
+                    </div>
 
-    <dt class="col-sm-3">Entra ID</dt>
-    <dd class="col-sm-9">
-        @if (e.EntraOid is null)
-        {
-            <span class="badge text-bg-warning">Not linked</span>
-            <span class="text-muted">— links automatically on first sign-in</span>
-        }
-        else
-        {
-            <span class="badge text-bg-success">Linked</span> <code>@e.EntraOid</code>
-        }
-    </dd>
-</dl>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input class="form-control" value="@e.Email" disabled />
+                        <div class="form-text">The tenant email is the Entra sign-in key and can't be changed here.</div>
+                    </div>
 
-<h4>Roles</h4>
-<p class="text-muted">Role changes take effect at the person's next sign-in.</p>
-<table class="table w-auto align-middle">
-    <tbody>
-        @foreach (var role in Model.AllRoles)
-        {
-            var has = held.Contains(role.Name);
-            <tr>
-                <td class="pe-4">
-                    @role.Name
-                    @if (role.IsSystemAdmin)
-                    {
-                        <span class="badge text-bg-danger ms-1">system</span>
-                    }
-                </td>
-                <td>
-                    @if (has)
-                    {
-                        <form asp-action="RevokeRole" asp-route-id="@e.Id" method="post" class="d-inline">
-                            <input type="hidden" name="roleId" value="@role.Id" />
-                            <button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
-                        </form>
-                    }
-                    else
-                    {
-                        <form asp-action="GrantRole" asp-route-id="@e.Id" method="post" class="d-inline">
-                            <input type="hidden" name="roleId" value="@role.Id" />
-                            <button type="submit" class="btn btn-sm btn-outline-primary">Grant</button>
-                        </form>
-                    }
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
+                    <button type="submit" class="btn btn-primary">Save profile</button>
+                </form>
 
-<a class="btn btn-outline-secondary" asp-action="Index">Back to employees</a>
+                <hr />
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge @(e.IsActive ? "text-bg-success" : "text-bg-secondary")">@(e.IsActive ? "Active" : "Inactive")</span>
+                    </dd>
+                    <dt class="col-sm-4">Entra ID</dt>
+                    <dd class="col-sm-8">
+                        @if (e.EntraOid is null)
+                        {
+                            <span class="badge text-bg-warning">Not linked</span>
+                            <span class="text-muted small">links on first sign-in</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-success">Linked</span>
+                        }
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light fw-semibold">Roles</div>
+            <div class="card-body">
+                <p class="text-muted small">Role changes take effect at the person's next sign-in.</p>
+                <table class="table table-sm align-middle mb-0">
+                    <tbody>
+                        @foreach (var role in Model.AllRoles)
+                        {
+                            var has = Model.HeldRoleIds.Contains(role.Id);
+                            <tr>
+                                <td>
+                                    @role.DisplayName
+                                    @if (role.IsSystemAdmin)
+                                    {
+                                        <span class="badge text-bg-danger ms-1">system</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    @if (has)
+                                    {
+                                        <form asp-action="RevokeRole" asp-route-id="@e.Id" method="post" class="d-inline">
+                                            <input type="hidden" name="roleId" value="@role.Id" />
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <form asp-action="GrantRole" asp-route-id="@e.Id" method="post" class="d-inline">
+                                            <input type="hidden" name="roleId" value="@role.Id" />
+                                            <button type="submit" class="btn btn-sm btn-outline-primary">Grant</button>
+                                        </form>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4">
+    <a class="btn btn-outline-secondary" asp-action="Index">Back to employees</a>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

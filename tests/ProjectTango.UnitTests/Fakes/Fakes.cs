@@ -36,6 +36,12 @@ public sealed class FakeRoleRepository : IRoleRepository
 
     public Task<Role?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         Task.FromResult(Roles.FirstOrDefault(r => r.Id == id));
+
+    public Task RenameAsync(Guid roleId, string displayName, CancellationToken cancellationToken = default)
+    {
+        Roles.Single(r => r.Id == roleId).DisplayName = displayName;
+        return Task.CompletedTask;
+    }
 }
 
 public sealed class FakeEmployeeRepository(FakeRoleRepository roles) : IEmployeeRepository
@@ -79,6 +85,14 @@ public sealed class FakeEmployeeRepository(FakeRoleRepository roles) : IEmployee
         return Task.CompletedTask;
     }
 
+    public Task UpdateProfileAsync(Guid employeeId, string displayName, Domain.Enums.EmploymentType employmentType, CancellationToken cancellationToken = default)
+    {
+        var employee = Employees.Single(e => e.Id == employeeId);
+        employee.DisplayName = displayName;
+        employee.EmploymentType = employmentType;
+        return Task.CompletedTask;
+    }
+
     public Task SetActiveAsync(Guid employeeId, bool isActive, CancellationToken cancellationToken = default)
     {
         Employees.Single(e => e.Id == employeeId).IsActive = isActive;
@@ -95,6 +109,20 @@ public sealed class FakeEmployeeRepository(FakeRoleRepository roles) : IEmployee
             .ToList();
         return Task.FromResult(names);
     }
+
+    public Task<IReadOnlyList<string>> GetRoleDisplayNamesAsync(Guid employeeId, CancellationToken cancellationToken = default)
+    {
+        var roleIds = RoleIdsByEmployee.GetValueOrDefault(employeeId, []);
+        IReadOnlyList<string> names = roles.Roles
+            .Where(r => roleIds.Contains(r.Id))
+            .Select(r => r.DisplayName)
+            .OrderBy(n => n)
+            .ToList();
+        return Task.FromResult(names);
+    }
+
+    public Task<IReadOnlySet<Guid>> GetRoleIdsAsync(Guid employeeId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlySet<Guid>>(RoleIdsByEmployee.GetValueOrDefault(employeeId, []).ToHashSet());
 
     public Task<bool> GrantRoleAsync(Guid employeeId, Guid roleId, Guid grantedBy, CancellationToken cancellationToken = default)
     {

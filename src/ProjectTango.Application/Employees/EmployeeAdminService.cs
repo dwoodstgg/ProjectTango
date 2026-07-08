@@ -29,8 +29,39 @@ public class EmployeeAdminService(
             return null;
         }
 
-        var roleNames = await employees.GetRoleNamesAsync(employeeId, cancellationToken);
+        var roleNames = await employees.GetRoleDisplayNamesAsync(employeeId, cancellationToken);
         return new EmployeeSummary(employee, roleNames);
+    }
+
+    public async Task<IReadOnlySet<Guid>> GetHeldRoleIdsAsync(Guid employeeId, CancellationToken cancellationToken = default)
+    {
+        RequireEmployeeAdmin();
+        return await employees.GetRoleIdsAsync(employeeId, cancellationToken);
+    }
+
+    public async Task UpdateProfileAsync(
+        Guid employeeId, string displayName, EmploymentType employmentType, CancellationToken cancellationToken = default)
+    {
+        RequireEmployeeAdmin();
+
+        var employee = await GetEmployeeOrThrowAsync(employeeId, cancellationToken);
+
+        displayName = displayName?.Trim() ?? "";
+        if (displayName.Length == 0)
+        {
+            throw new DomainException("Display name cannot be empty.");
+        }
+
+        if (employee.DisplayName == displayName && employee.EmploymentType == employmentType)
+        {
+            return;
+        }
+
+        await employees.UpdateProfileAsync(employeeId, displayName, employmentType, cancellationToken);
+
+        await audit.WriteAsync(new AuditEvent(
+            Actor(), "employee.updated", "employee", employeeId,
+            new { DisplayName = displayName, EmploymentType = employmentType.ToString() }), cancellationToken);
     }
 
     public async Task<IReadOnlyList<Role>> ListRolesAsync(CancellationToken cancellationToken = default)

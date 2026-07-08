@@ -19,7 +19,7 @@ public class AssignmentRepository(NpgsqlDataSource dataSource) : IAssignmentRepo
         var rows = await connection.QueryAsync<AssignmentRow>(new CommandDefinition(
             """
             SELECT a.id, a.project_id, a.employee_id, a.default_billing_role_id, a.start_date, a.end_date,
-                   e.display_name AS employee_name, r.name AS default_role_name
+                   e.display_name AS employee_name, r.display_name AS default_role_name
             FROM project_assignments a
             JOIN employees e ON e.id = a.employee_id
             LEFT JOIN roles r ON r.id = a.default_billing_role_id

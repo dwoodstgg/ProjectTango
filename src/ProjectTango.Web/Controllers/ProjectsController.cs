@@ -147,7 +147,7 @@ public class ProjectsController(
             Rates = await rateCardService.ListForProjectAsync(id, cancellationToken),
             Assignments = await assignmentService.ListForProjectAsync(id, cancellationToken),
             BillableRoleOptions = billableRoles
-                .Select(r => new SelectListItem(r.Name, r.Id.ToString()))
+                .Select(r => new SelectListItem(r.DisplayName, r.Id.ToString()))
                 .ToList(),
             EmployeeOptions = (await projectAdmin.GetManagerOptionsAsync(cancellationToken))
                 .Select(e => new SelectListItem(e.DisplayName, e.Id.ToString()))

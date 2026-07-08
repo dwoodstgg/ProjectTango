@@ -42,14 +42,50 @@ public class EmployeesController(EmployeeAdminService employeeAdmin) : Controlle
 
     public async Task<IActionResult> Details(Guid id, CancellationToken cancellationToken)
     {
+        var page = await BuildDetailsAsync(id, profile: null, cancellationToken);
+        return page is null ? NotFound() : View(page);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateProfile(Guid id, EmployeeProfileViewModel profile, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            var invalid = await BuildDetailsAsync(id, profile, cancellationToken);
+            return invalid is null ? NotFound() : View(nameof(Details), invalid);
+        }
+
+        try
+        {
+            await employeeAdmin.UpdateProfileAsync(id, profile.DisplayName!, profile.EmploymentType, cancellationToken);
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        catch (DomainException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            var page = await BuildDetailsAsync(id, profile, cancellationToken);
+            return page is null ? NotFound() : View(nameof(Details), page);
+        }
+    }
+
+    private async Task<EmployeeDetailsViewModel?> BuildDetailsAsync(
+        Guid id, EmployeeProfileViewModel? profile, CancellationToken cancellationToken)
+    {
         var summary = await employeeAdmin.GetAsync(id, cancellationToken);
         if (summary is null)
         {
-            return NotFound();
+            return null;
         }
 
         var allRoles = await employeeAdmin.ListRolesAsync(cancellationToken);
-        return View(new EmployeeDetailsViewModel(summary, allRoles));
+        var heldRoleIds = await employeeAdmin.GetHeldRoleIdsAsync(id, cancellationToken);
+
+        return new EmployeeDetailsViewModel(summary, allRoles, heldRoleIds, profile ?? new EmployeeProfileViewModel
+        {
+            DisplayName = summary.Employee.DisplayName,
+            EmploymentType = summary.Employee.EmploymentType,
+        });
     }
 
     [HttpPost]

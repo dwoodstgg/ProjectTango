@@ -13,11 +13,11 @@ public class RateCardRepository(NpgsqlDataSource dataSource) : IRateCardReposito
         var rows = await connection.QueryAsync<RateCardRow>(new CommandDefinition(
             """
             SELECT rc.id, rc.project_id, rc.role_id, rc.hourly_rate, rc.effective_from, rc.effective_to,
-                   r.name AS role_name
+                   r.display_name AS role_name
             FROM project_rate_cards rc
             JOIN roles r ON r.id = rc.role_id
             WHERE rc.project_id = @projectId
-            ORDER BY r.name, rc.effective_from DESC
+            ORDER BY r.display_name, rc.effective_from DESC
             """,
             new { projectId },
             cancellationToken: cancellationToken));

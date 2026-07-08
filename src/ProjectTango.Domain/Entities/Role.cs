@@ -6,7 +6,13 @@ public class Role
 {
     public Guid Id { get; set; }
 
+    /// <summary>Stable authorization key — matches a <see cref="RoleNames"/> constant,
+    /// used in claims and [Authorize]. Never edited. Display uses <see cref="DisplayName"/>.</summary>
     public required string Name { get; set; }
+
+    /// <summary>Editable label shown throughout the UI (badges, dropdowns, rate cards).
+    /// Renaming this never affects permissions. Seeded equal to <see cref="Name"/>.</summary>
+    public string DisplayName { get; set; } = "";
 
     /// <summary>False for system roles (Admin) that are never a billing role.</summary>
     public bool IsBillable { get; set; } = true;

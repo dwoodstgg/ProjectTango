@@ -29,9 +29,9 @@ public class EmployeeRepository(NpgsqlDataSource dataSource) : IEmployeeReposito
 
         var roleRows = await connection.QueryAsync<(Guid EmployeeId, string RoleName)>(new CommandDefinition(
             """
-            SELECT er.employee_id, r.name FROM employee_roles er
+            SELECT er.employee_id, r.display_name FROM employee_roles er
             JOIN roles r ON r.id = er.role_id
-            ORDER BY r.name
+            ORDER BY r.display_name
             """,
             cancellationToken: cancellationToken));
 
@@ -42,6 +42,20 @@ public class EmployeeRepository(NpgsqlDataSource dataSource) : IEmployeeReposito
         return all
             .Select(e => new EmployeeSummary(e, rolesByEmployee.GetValueOrDefault(e.Id, [])))
             .ToList();
+    }
+
+    public async Task UpdateProfileAsync(
+        Guid employeeId, string displayName, Domain.Enums.EmploymentType employmentType, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE employees
+            SET display_name = @displayName, employment_type = @employmentType, updated_at = now()
+            WHERE id = @employeeId
+            """,
+            new { employeeId, displayName, employmentType = employmentType.ToString().ToLowerInvariant() },
+            cancellationToken: cancellationToken));
     }
 
     public async Task SetActiveAsync(Guid employeeId, bool isActive, CancellationToken cancellationToken = default)
@@ -150,5 +164,30 @@ public class EmployeeRepository(NpgsqlDataSource dataSource) : IEmployeeReposito
             new { employeeId },
             cancellationToken: cancellationToken));
         return names.ToList();
+    }
+
+    public async Task<IReadOnlyList<string>> GetRoleDisplayNamesAsync(Guid employeeId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var names = await connection.QueryAsync<string>(new CommandDefinition(
+            """
+            SELECT r.display_name FROM roles r
+            JOIN employee_roles er ON er.role_id = r.id
+            WHERE er.employee_id = @employeeId
+            ORDER BY r.display_name
+            """,
+            new { employeeId },
+            cancellationToken: cancellationToken));
+        return names.ToList();
+    }
+
+    public async Task<IReadOnlySet<Guid>> GetRoleIdsAsync(Guid employeeId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var ids = await connection.QueryAsync<Guid>(new CommandDefinition(
+            "SELECT role_id FROM employee_roles WHERE employee_id = @employeeId",
+            new { employeeId },
+            cancellationToken: cancellationToken));
+        return ids.ToHashSet();
     }
 }
