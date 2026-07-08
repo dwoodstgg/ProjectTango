@@ -1,6 +1,6 @@
 @model TimesheetGridViewModel
 @{
-    var who = User.Identity?.Name;
+    var who = User.GetDisplayName();
     var pageTitle = string.IsNullOrWhiteSpace(who) ? "Timesheet" : $"{who} — Timesheet";
     ViewData["Title"] = pageTitle;
     ViewData["ContainerClass"] = "container-fluid px-md-4";
