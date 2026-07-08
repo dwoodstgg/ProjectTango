@@ -9,7 +9,7 @@ services:
     environment:
       POSTGRES_DB: projecttango
       POSTGRES_USER: tango
-      POSTGRES_PASSWORD: tango
+      POSTGRES_PASSWORD: tango@123
     ports:
       - "5433:5432"
     volumes:

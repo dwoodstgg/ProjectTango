@@ -12,10 +12,10 @@ See **[design-doc.md](design-doc.md)** for the full design (source of truth) and
 
 Prereqs: .NET 10 SDK, Docker Desktop (for Testcontainers), PostgreSQL (native install or Docker).
 
-The app connects to `localhost:5432`, database `projecttango`, user `tango`/`tango`. On the primary dev machine that's the native PostgreSQL 18 install (data dir `C:\Program Files\PostgreSQL\18\data`, browsable in pgAdmin). One-time setup — run as the `postgres` superuser (pgAdmin Query Tool or psql):
+The app connects to `localhost:5432`, database `projecttango`, user `tango` (password in `appsettings.json`). On the primary dev machine that's the native PostgreSQL 18 install (data dir `C:\Program Files\PostgreSQL\18\data`, browsable in pgAdmin). One-time setup — run as the `postgres` superuser (pgAdmin Query Tool or psql):
 
 ```sql
-CREATE ROLE tango LOGIN PASSWORD 'tango';
+CREATE ROLE tango LOGIN PASSWORD 'tango@123';
 CREATE DATABASE projecttango OWNER tango;
 ```
 
