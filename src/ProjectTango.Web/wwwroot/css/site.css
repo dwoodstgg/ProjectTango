@@ -151,18 +151,23 @@ body {
 /* ---- Timesheet grid ------------------------------------------------- */
 
 .ts-wrap {
-  overflow-x: auto;
+  overflow-x: auto;               /* safety net on very narrow screens only */
   border: 1px solid #e9ecef;
-  border-radius: .5rem;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  border-radius: .625rem;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 4px 16px rgba(16, 24, 40, .06);
+  background: #fff;
 }
 
+/* Fixed layout + 100% width → the grid always fills its container: day columns
+   share the leftover space equally, so a 7-day week reads wide and a full month
+   fits without a horizontal scrollbar. */
 .ts-grid {
+  width: 100%;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: .8rem;
+  font-size: .82rem;
   margin: 0;
-  white-space: nowrap;
 }
 
 .ts-grid th,
@@ -171,6 +176,7 @@ body {
   border-right: 1px solid #f4f5f7;
   text-align: center;
   vertical-align: middle;
+  padding: 0;
 }
 
 .ts-grid thead th {
@@ -178,18 +184,23 @@ body {
   top: 0;
   z-index: 2;
   background: #f8f9fa;
-  padding: .3rem .2rem;
+  padding: .5rem .2rem;
   font-weight: 600;
   color: #495057;
-  min-width: 2.4rem;
 }
 
-.ts-grid thead th small {
+.ts-grid thead th .ts-dow {
   display: block;
   font-weight: 400;
   color: #adb5bd;
   font-size: .72em;
+  text-transform: uppercase;
+  letter-spacing: .03em;
 }
+
+/* Fixed side columns (drive table-layout: fixed); day columns take the rest. */
+.ts-grid thead th.ts-proj { width: 15rem; }
+.ts-grid thead th.ts-total { width: 4.5rem; }
 
 /* Sticky project column. */
 .ts-grid .ts-proj {
@@ -198,41 +209,50 @@ body {
   z-index: 1;
   background: #fff;
   text-align: left;
-  padding: .4rem .7rem;
-  min-width: 15rem;
+  padding: .55rem .8rem;
   box-shadow: 1px 0 0 #e9ecef;
 }
 
 .ts-grid thead .ts-proj { z-index: 3; background: #f8f9fa; }
-.ts-grid .ts-proj .ts-code { font-weight: 600; color: #1f2933; }
-.ts-grid .ts-proj .ts-name { color: #868e96; font-size: .92em; }
-.ts-grid .ts-proj .form-select-sm { margin-top: .3rem; max-width: 12rem; }
+.ts-grid .ts-proj .ts-code { font-weight: 600; color: #1f2933; letter-spacing: -.01em; }
+.ts-grid .ts-proj .ts-name { color: #868e96; font-size: .9em; margin-bottom: .4rem; }
+.ts-grid .ts-proj .form-select-sm { max-width: 100%; }
 
-.ts-grid .ts-weekend { background: #fbfcfd; }
-.ts-grid .ts-total { background: #f8f9fa; font-weight: 600; color: #1f2933; min-width: 3rem; }
+.ts-grid tbody tr:hover td { background: #fcfcfd; }
+.ts-grid tbody tr:hover .ts-proj { background: #fcfcfd; }
+
+.ts-weekend { background: #fafbfc; }
+
+/* Today's column — subtle blue accent that wins over weekend shading. */
+.ts-grid thead th.ts-today { background: #e7f1ff; color: #0d6efd; }
+.ts-grid td.ts-today { background: #f3f8ff; }
+
+.ts-total { background: #f8f9fa; font-weight: 600; color: #1f2933; }
 
 .ts-grid tfoot td {
   background: #f8f9fa;
   font-weight: 600;
   color: #1f2933;
-  padding: .3rem .2rem;
+  padding: .45rem .2rem;
+  border-top: 2px solid #e9ecef;
 }
 
 .ts-hours {
-  width: 2.9rem;
+  width: 100%;
   border: 0;
   background: transparent;
   text-align: center;
-  padding: .35rem .1rem;
-  font-size: .8rem;
+  padding: .6rem .15rem;
+  font-size: .85rem;
+  color: #212529;
   -moz-appearance: textfield;
 }
 
 .ts-hours::-webkit-outer-spin-button,
 .ts-hours::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.ts-hours:focus { outline: 2px solid #0d6efd55; outline-offset: -2px; background: #fff; }
-.ts-hours:disabled { color: #ced4da; background: transparent; }
-.ts-cell.saving { background: #fff3cd; }
-.ts-cell.save-ok { background: #d1e7dd; transition: background .5s; }
-.ts-cell.save-err { background: #f8d7da; }
-.ts-cell.approved input { color: #0f5132; font-weight: 600; }
+.ts-hours:focus { outline: 2px solid #0d6efd; outline-offset: -2px; background: #fff; border-radius: .2rem; }
+.ts-hours:disabled { color: #ced4da; }
+.ts-cell.saving input { background: #fff3cd; }
+.ts-cell.save-ok input { background: #d1e7dd; transition: background .5s; }
+.ts-cell.save-err input { background: #f8d7da; }
+.ts-cell.approved input { color: #0f5132; font-weight: 600; background: #f0f9f4; }

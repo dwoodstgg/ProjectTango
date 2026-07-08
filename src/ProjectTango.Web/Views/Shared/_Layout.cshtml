@@ -62,7 +62,7 @@
             </div>
         </nav>
     </header>
-    <div class="container">
+    <div class="@(ViewData["ContainerClass"] as string ?? "container")">
         <main role="main" class="pb-3">
             @RenderBody()
         </main>
