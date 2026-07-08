@@ -9,7 +9,10 @@ using ProjectTango.Web.Models;
 namespace ProjectTango.Web.Controllers;
 
 [Authorize(Roles = $"{RoleNames.Admin},{RoleNames.OperationsManager},{RoleNames.ProjectManager}")]
-public class ProjectsController(ProjectAdminService projectAdmin) : Controller
+public class ProjectsController(
+    ProjectAdminService projectAdmin,
+    RateCardService rateCardService,
+    AssignmentService assignmentService) : Controller
 {
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
@@ -49,14 +52,8 @@ public class ProjectsController(ProjectAdminService projectAdmin) : Controller
     [HttpGet]
     public async Task<IActionResult> Edit(Guid id, CancellationToken cancellationToken)
     {
-        var project = await projectAdmin.GetAsync(id, cancellationToken);
-        if (project is null)
-        {
-            return NotFound();
-        }
-
-        ViewBag.Project = project;
-        return View(await WithOptionsAsync(ProjectFormViewModel.From(project), cancellationToken));
+        var page = await BuildManagePageAsync(id, form: null, cancellationToken);
+        return page is null ? NotFound() : View(page);
     }
 
     [HttpPost]
@@ -65,8 +62,8 @@ public class ProjectsController(ProjectAdminService projectAdmin) : Controller
     {
         if (!ModelState.IsValid)
         {
-            ViewBag.Project = await projectAdmin.GetAsync(id, cancellationToken);
-            return View(await WithOptionsAsync(model, cancellationToken));
+            var page = await BuildManagePageAsync(id, model, cancellationToken);
+            return page is null ? NotFound() : View(page);
         }
 
         try
@@ -79,8 +76,8 @@ public class ProjectsController(ProjectAdminService projectAdmin) : Controller
         catch (DomainException ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            ViewBag.Project = await projectAdmin.GetAsync(id, cancellationToken);
-            return View(await WithOptionsAsync(model, cancellationToken));
+            var page = await BuildManagePageAsync(id, model, cancellationToken);
+            return page is null ? NotFound() : View(page);
         }
     }
 
@@ -88,16 +85,74 @@ public class ProjectsController(ProjectAdminService projectAdmin) : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetStatus(Guid id, ProjectStatus status, CancellationToken cancellationToken)
     {
+        return await RunAndReturnToManage(id, () => projectAdmin.SetStatusAsync(id, status, cancellationToken));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetRate(
+        Guid id, Guid roleId, decimal hourlyRate, DateOnly effectiveFrom, CancellationToken cancellationToken)
+    {
+        return await RunAndReturnToManage(id, () =>
+            rateCardService.SetRateAsync(id, roleId, hourlyRate, effectiveFrom, cancellationToken));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Assign(
+        Guid id, Guid employeeId, Guid? defaultBillingRoleId, DateOnly? startDate, CancellationToken cancellationToken)
+    {
+        return await RunAndReturnToManage(id, () =>
+            assignmentService.AssignAsync(id, employeeId, defaultBillingRoleId, startDate, cancellationToken));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EndAssignment(
+        Guid id, Guid assignmentId, DateOnly? endDate, CancellationToken cancellationToken)
+    {
+        return await RunAndReturnToManage(id, () =>
+            assignmentService.EndAsync(assignmentId, endDate ?? DateOnly.FromDateTime(DateTime.Today), cancellationToken));
+    }
+
+    private async Task<IActionResult> RunAndReturnToManage(Guid projectId, Func<Task> action)
+    {
         try
         {
-            await projectAdmin.SetStatusAsync(id, status, cancellationToken);
+            await action();
         }
         catch (DomainException ex)
         {
             TempData["Error"] = ex.Message;
         }
 
-        return RedirectToAction(nameof(Edit), new { id });
+        return RedirectToAction(nameof(Edit), new { id = projectId });
+    }
+
+    private async Task<ProjectManageViewModel?> BuildManagePageAsync(
+        Guid id, ProjectFormViewModel? form, CancellationToken cancellationToken)
+    {
+        var project = await projectAdmin.GetAsync(id, cancellationToken);
+        if (project is null)
+        {
+            return null;
+        }
+
+        var billableRoles = await projectAdmin.GetBillableRoleOptionsAsync(cancellationToken);
+
+        return new ProjectManageViewModel
+        {
+            Project = project,
+            Form = await WithOptionsAsync(form ?? ProjectFormViewModel.From(project), cancellationToken),
+            Rates = await rateCardService.ListForProjectAsync(id, cancellationToken),
+            Assignments = await assignmentService.ListForProjectAsync(id, cancellationToken),
+            BillableRoleOptions = billableRoles
+                .Select(r => new SelectListItem(r.Name, r.Id.ToString()))
+                .ToList(),
+            EmployeeOptions = (await projectAdmin.GetManagerOptionsAsync(cancellationToken))
+                .Select(e => new SelectListItem(e.DisplayName, e.Id.ToString()))
+                .ToList(),
+        };
     }
 
     private async Task<ProjectFormViewModel> WithOptionsAsync(ProjectFormViewModel model, CancellationToken cancellationToken)

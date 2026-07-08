@@ -170,3 +170,65 @@ public sealed class FakeProjectRepository : IProjectRepository
         return Task.CompletedTask;
     }
 }
+
+public sealed class FakeRateCardRepository(FakeRoleRepository roles) : IRateCardRepository
+{
+    public List<ProjectRateCard> Rates { get; } = [];
+    public List<(Guid RateCardId, DateOnly EffectiveTo)> Closed { get; } = [];
+
+    public Task<IReadOnlyList<RateCardSummary>> GetForProjectAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<RateCardSummary>>(Rates
+            .Where(r => r.ProjectId == projectId)
+            .Select(r => new RateCardSummary(r, roles.Roles.Single(x => x.Id == r.RoleId).Name))
+            .ToList());
+
+    public Task<IReadOnlyList<ProjectRateCard>> GetForRoleAsync(Guid projectId, Guid roleId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ProjectRateCard>>(Rates
+            .Where(r => r.ProjectId == projectId && r.RoleId == roleId)
+            .OrderBy(r => r.EffectiveFrom)
+            .ToList());
+
+    public Task AddAsync(ProjectRateCard rateCard, CancellationToken cancellationToken = default)
+    {
+        Rates.Add(rateCard);
+        return Task.CompletedTask;
+    }
+
+    public Task CloseAsync(Guid rateCardId, DateOnly effectiveTo, CancellationToken cancellationToken = default)
+    {
+        Rates.Single(r => r.Id == rateCardId).EffectiveTo = effectiveTo;
+        Closed.Add((rateCardId, effectiveTo));
+        return Task.CompletedTask;
+    }
+
+    public Task<decimal?> ResolveAsync(Guid projectId, Guid roleId, DateOnly date, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Rates
+            .Where(r => r.ProjectId == projectId && r.RoleId == roleId && r.IsEffectiveOn(date))
+            .Select(r => (decimal?)r.HourlyRate)
+            .FirstOrDefault());
+}
+
+public sealed class FakeAssignmentRepository : IAssignmentRepository
+{
+    public List<ProjectAssignment> Assignments { get; } = [];
+
+    public Task<IReadOnlyList<AssignmentSummary>> GetForProjectAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<AssignmentSummary>>(Assignments
+            .Where(a => a.ProjectId == projectId)
+            .Select(a => new AssignmentSummary(a, "employee", null))
+            .ToList());
+
+    public Task<ProjectAssignment?> GetAsync(Guid assignmentId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Assignments.FirstOrDefault(a => a.Id == assignmentId));
+
+    public Task<ProjectAssignment?> GetByProjectAndEmployeeAsync(Guid projectId, Guid employeeId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Assignments.FirstOrDefault(a => a.ProjectId == projectId && a.EmployeeId == employeeId));
+
+    public Task AddAsync(ProjectAssignment assignment, CancellationToken cancellationToken = default)
+    {
+        Assignments.Add(assignment);
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateAsync(ProjectAssignment assignment, CancellationToken cancellationToken = default) => Task.CompletedTask;
+}

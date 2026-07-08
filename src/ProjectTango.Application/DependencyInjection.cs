@@ -13,6 +13,8 @@ public static class DependencyInjection
         services.AddScoped<EmployeeAdminService>();
         services.AddScoped<ClientAdminService>();
         services.AddScoped<ProjectAdminService>();
+        services.AddScoped<RateCardService>();
+        services.AddScoped<AssignmentService>();
         return services;
     }
 }

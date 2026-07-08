@@ -23,7 +23,7 @@ public class ProjectAdminServiceTests
     public ProjectAdminServiceTests()
     {
         _employees = new FakeEmployeeRepository(_roles);
-        _service = new ProjectAdminService(_currentUser, _projects, _clients, _employees, _audit);
+        _service = new ProjectAdminService(_currentUser, _projects, _clients, _employees, _roles, _audit);
 
         _clients.Clients.Add(_client);
         _pm = AddEmployee("pm@thegeospatialgroup.com");

@@ -15,6 +15,7 @@ public class ProjectAdminService(
     IProjectRepository projects,
     IClientRepository clients,
     IEmployeeRepository employees,
+    Roles.IRoleRepository roles,
     IAuditLog audit)
 {
     private static readonly Dictionary<ProjectStatus, ProjectStatus[]> AllowedTransitions = new()
@@ -49,6 +50,12 @@ public class ProjectAdminService(
             .Select(s => s.Employee)
             .Where(e => e.IsActive)
             .ToList();
+    }
+
+    public async Task<IReadOnlyList<Role>> GetBillableRoleOptionsAsync(CancellationToken cancellationToken = default)
+    {
+        currentUser.RequireAny(RoleNames.OperationsManager, RoleNames.ProjectManager);
+        return (await roles.GetAllAsync(cancellationToken)).Where(r => r.IsBillable).ToList();
     }
 
     public async Task<Project> CreateAsync(
@@ -140,26 +147,7 @@ public class ProjectAdminService(
             new { From = from.ToString(), To = target.ToString(), adminOverride }), cancellationToken);
     }
 
-    /// <summary>Ops manages any project; a PM only their own; Admin bypasses (flagged).</summary>
-    private bool RequireCanManage(Project project)
-    {
-        if (currentUser.IsInRole(RoleNames.OperationsManager))
-        {
-            return false;
-        }
-
-        if (currentUser.IsInRole(RoleNames.ProjectManager) && project.ProjectManagerId == currentUser.EmployeeId)
-        {
-            return false;
-        }
-
-        if (currentUser.IsInRole(RoleNames.Admin))
-        {
-            return true;
-        }
-
-        throw new UnauthorizedAccessException("Only Operations Managers or the project's PM can manage this project.");
-    }
+    private bool RequireCanManage(Project project) => currentUser.RequireCanManage(project);
 
     private async Task ValidateAsync(
         Guid clientId, Guid projectManagerId, DateOnly? startDate, DateOnly? endDate, CancellationToken cancellationToken)

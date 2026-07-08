@@ -1,8 +1,8 @@
-@using ProjectTango.Domain.Entities
 @using ProjectTango.Domain.Enums
-@model ProjectFormViewModel
+@model ProjectManageViewModel
 @{
-    var project = (Project)ViewBag.Project;
+    var project = Model.Project;
+    var today = DateOnly.FromDateTime(DateTime.Today);
     ViewData["Title"] = $"{project.Code} — {project.Name}";
 }
 
@@ -49,15 +49,140 @@
         _ => "text-bg-secondary" })">
         @(project.Status == ProjectStatus.OnHold ? "On hold" : project.Status.ToString())
     </span>
-    <span class="text-muted ms-2">Close-out and archiving arrive in Phase 2.</span>
 </p>
 
-<div class="row">
-    <div class="col-md-6">
+<div class="row g-5">
+    <div class="col-lg-5">
+        <h4>Details</h4>
         <form asp-action="Edit" asp-route-id="@project.Id">
-            <partial name="_Form" model="Model" />
+            <partial name="_Form" model="Model.Form" />
             <button type="submit" class="btn btn-primary">Save</button>
-            <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+            <a class="btn btn-outline-secondary" asp-action="Index">Back</a>
+        </form>
+    </div>
+
+    <div class="col-lg-7">
+        <h4>Rate card</h4>
+        <p class="text-muted small mb-2">
+            Rates are effective-dated per billing role. A change closes the current rate the day
+            before and starts a new one — history is never edited, past entries never re-price.
+        </p>
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr><th>Billing role</th><th class="text-end">Rate</th><th>Effective</th><th></th></tr>
+            </thead>
+            <tbody>
+                @if (Model.Rates.Count == 0)
+                {
+                    <tr><td colspan="4" class="text-muted">No rates yet — time can't be approved without one.</td></tr>
+                }
+                @foreach (var rate in Model.Rates)
+                {
+                    var rc = rate.RateCard;
+                    var current = rc.EffectiveTo is null;
+                    <tr class="@(current ? null : "text-muted")">
+                        <td>@rate.RoleName</td>
+                        <td class="text-end">@rc.HourlyRate.ToString("C2")/hr</td>
+                        <td class="text-nowrap">
+                            @rc.EffectiveFrom.ToString("yyyy-MM-dd") → @(rc.EffectiveTo?.ToString("yyyy-MM-dd") ?? "open")
+                        </td>
+                        <td>@if (current) { <span class="badge text-bg-success">current</span> }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <form asp-action="SetRate" asp-route-id="@project.Id" method="post" class="row g-2 align-items-end mb-4">
+            <div class="col-auto">
+                <label class="form-label small mb-0">Billing role</label>
+                <select name="roleId" class="form-select form-select-sm" required>
+                    <option value="">— role —</option>
+                    @foreach (var option in Model.BillableRoleOptions)
+                    {
+                        <option value="@option.Value">@option.Text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label small mb-0">Hourly rate</label>
+                <input name="hourlyRate" type="number" step="0.01" min="0" class="form-control form-control-sm" style="width: 8rem" required />
+            </div>
+            <div class="col-auto">
+                <label class="form-label small mb-0">Effective from</label>
+                <input name="effectiveFrom" type="date" value="@today.ToString("yyyy-MM-dd")" class="form-control form-control-sm" required />
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-primary">Set rate</button>
+            </div>
+        </form>
+
+        <h4>Team</h4>
+        <p class="text-muted small mb-2">
+            Time entry requires an active assignment. The default billing role only pre-selects
+            in the timesheet — the billing role is chosen per entry.
+        </p>
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr><th>Employee</th><th>Default billing role</th><th>Active</th><th></th></tr>
+            </thead>
+            <tbody>
+                @if (Model.Assignments.Count == 0)
+                {
+                    <tr><td colspan="4" class="text-muted">Nobody is assigned yet.</td></tr>
+                }
+                @foreach (var item in Model.Assignments)
+                {
+                    var a = item.Assignment;
+                    var ended = a.EndDate is not null && a.EndDate < today;
+                    <tr class="@(ended ? "text-muted" : null)">
+                        <td>@item.EmployeeName</td>
+                        <td>@(item.DefaultRoleName ?? "—")</td>
+                        <td class="text-nowrap">
+                            @(a.StartDate?.ToString("yyyy-MM-dd") ?? "…") → @(a.EndDate?.ToString("yyyy-MM-dd") ?? "open")
+                        </td>
+                        <td class="text-end">
+                            @if (a.EndDate is null)
+                            {
+                                <form asp-action="EndAssignment" asp-route-id="@project.Id" method="post" class="d-inline">
+                                    <input type="hidden" name="assignmentId" value="@a.Id" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                                            title="Ends today; time already logged is unaffected">End</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <form asp-action="Assign" asp-route-id="@project.Id" method="post" class="row g-2 align-items-end">
+            <div class="col-auto">
+                <label class="form-label small mb-0">Employee</label>
+                <select name="employeeId" class="form-select form-select-sm" required>
+                    <option value="">— employee —</option>
+                    @foreach (var option in Model.EmployeeOptions)
+                    {
+                        <option value="@option.Value">@option.Text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label small mb-0">Default billing role</label>
+                <select name="defaultBillingRoleId" class="form-select form-select-sm">
+                    <option value="">— optional —</option>
+                    @foreach (var option in Model.BillableRoleOptions)
+                    {
+                        <option value="@option.Value">@option.Text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label small mb-0">Start date</label>
+                <input name="startDate" type="date" class="form-control form-control-sm" />
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-primary">Assign</button>
+            </div>
         </form>
     </div>
 </div>
