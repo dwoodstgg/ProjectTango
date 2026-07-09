@@ -4,6 +4,7 @@ using Npgsql;
 using ProjectTango.Application.Clients;
 using ProjectTango.Application.Common;
 using ProjectTango.Application.Employees;
+using ProjectTango.Application.Preferences;
 using ProjectTango.Application.Projects;
 using ProjectTango.Application.Roles;
 using ProjectTango.Application.TimeEntries;
@@ -31,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<IAssignmentRepository, AssignmentRepository>();
         services.AddScoped<ITimeEntryRepository, TimeEntryRepository>();
         services.AddScoped<ITimesheetPeriodRepository, TimesheetPeriodRepository>();
+        services.AddScoped<IEmployeePreferenceRepository, EmployeePreferenceRepository>();
         services.AddScoped<IAuditLog, AuditLogRepository>();
 
         return services;

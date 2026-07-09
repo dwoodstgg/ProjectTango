@@ -12,6 +12,10 @@
         <span class="text-muted">@Model.RangeLabel</span>
     </div>
     <div class="d-flex gap-2">
+        <div class="btn-group" role="group" aria-label="Layout">
+            <button type="button" class="btn btn-sm btn-primary" id="ts-layout-grid">Grid</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="ts-layout-daily">Daily</button>
+        </div>
         <div class="btn-group" role="group" aria-label="View">
             <a class="btn btn-sm @(Model.IsWeek ? "btn-primary" : "btn-outline-secondary")"
                asp-action="Index" asp-route-view="week" asp-route-anchor="@Model.CurrentAnchor.ToString("yyyy-MM-dd")">Week</a>
@@ -56,9 +60,9 @@
 @Html.AntiForgeryToken()
 
 <p class="text-muted small mb-2">
-    Enter hours in quarter-hour steps. Each row bills under the role selected on its left — change it
-    before editing a day if the work was a different kind. Billable time needs a work description —
-    you'll be prompted for one as you enter hours. Entries save as you go; an approved entry is read-only.
+    Enter hours in quarter-hour steps. Each row bills under its project's assigned role. Billable time
+    needs a work description — you'll be prompted for one as you enter hours. Entries save as you go;
+    an approved entry is read-only.
 </p>
 
 <div class="ts-wrap">
@@ -76,17 +80,9 @@
         <tbody>
             @foreach (var row in Model.Rows)
             {
-                <tr data-project="@row.ProjectId">
+                <tr data-project="@row.ProjectId" data-role="@row.DefaultBillingRoleId">
                     <td class="ts-proj">
-                        <div class="ts-code">@row.Code</div>
-                        <div class="ts-name">@row.Name</div>
-                        <select class="form-select form-select-sm ts-role" aria-label="Billing role for @row.Code">
-                            @foreach (var opt in Model.BillableRoleOptions)
-                            {
-                                var selected = row.DefaultBillingRoleId?.ToString() == opt.Value;
-                                <option value="@opt.Value" selected="@selected">@opt.Text</option>
-                            }
-                        </select>
+                        <div class="ts-proj-label"><span class="ts-proj-client">@row.ClientName</span> – @row.Name</div>
                     </td>
                     @foreach (var d in Model.Days)
                     {
@@ -126,15 +122,20 @@
     </table>
 </div>
 
+<div id="ts-daily" class="d-none" data-today="@today.ToString("yyyy-MM-dd")"
+     data-url="@Url.Action("DailyMonth")" data-layout-url="@Url.Action("SetLayout")"
+     data-initial="@Model.InitialLayout">
+    <div class="d-flex gap-2 mb-3 align-items-center justify-content-center">
+        <select id="ts-daily-month" class="form-select form-select-sm w-auto" aria-label="Month"></select>
+        <select id="ts-daily-year" class="form-select form-select-sm w-auto" aria-label="Year"></select>
+    </div>
+    <div id="ts-daily-cards" class="ts-daily-cards"></div>
+</div>
+
 <div id="ts-pop" class="ts-pop d-none" role="dialog" aria-label="Time entry">
     <div class="ts-pop-title" id="ts-pop-title"></div>
-    <label class="form-label small mb-1">Billing role</label>
-    <select id="ts-pop-role" class="form-select form-select-sm mb-2">
-        @foreach (var opt in Model.BillableRoleOptions)
-        {
-            <option value="@opt.Value">@opt.Text</option>
-        }
-    </select>
+    @* Role isn't chosen by the employee — each row bills under its project's assigned billing
+       role, carried on the row and sent with the save. *@
     <div class="row g-2 mb-2">
         <div class="col-5">
             <label class="form-label small mb-1">Hours</label>
@@ -193,16 +194,43 @@
 
         function rowRole(cell) {
             const input = cell.querySelector('.ts-hours');
-            return input.dataset.role || cell.closest('tr').querySelector('.ts-role').value;
+            return input.dataset.role || cell.closest('tr').dataset.role;
         }
 
-        // Reflects a saved entry back into the cell: hours value, stored notes/role, and the
-        // note indicator (● has description, ✎ none).
-        function applySaved(cell, data, roleId, notes) {
+        const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+        // Posts one entry. Returns the parsed response; callers decide how to react (a missing
+        // billable description comes back as {ok:false, needsDescription:true}). `target` names
+        // what is being saved (a grid cell or a daily-view row) — see the target factories below.
+        async function postSave(target, hours, roleId, notes) {
+            if (target.flashEl) flash(target.flashEl, 'saving');
+            try {
+                const res = await fetch(saveUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'RequestVerificationToken': token },
+                    body: new URLSearchParams({
+                        projectId: target.projectId, date: target.date,
+                        hours, billingRoleId: roleId, notes: notes || ''
+                    })
+                });
+                const data = await res.json();
+                if (data.ok) { errorBox.classList.add('d-none'); if (target.flashEl) flash(target.flashEl, data.cleared ? null : 'save-ok'); }
+                else if (!data.needsDescription) { errorBox.textContent = data.error || 'Could not save entry.'; errorBox.classList.remove('d-none'); if (target.flashEl) flash(target.flashEl, 'save-err'); }
+                return data;
+            } catch {
+                errorBox.textContent = 'Could not reach the server. Try again.';
+                errorBox.classList.remove('d-none');
+                if (target.flashEl) flash(target.flashEl, 'save-err');
+                return { ok: false };
+            }
+        }
+
+        // Reflects a saved entry back into a grid cell: hours value, stored notes, and the note
+        // indicator (● has description, ✎ none).
+        function applySavedGrid(cell, data) {
             const input = cell.querySelector('.ts-hours');
             input.value = data.cleared ? '' : show(data.hours, '');
             input.dataset.prev = input.value;
-            input.dataset.role = roleId;
             input.dataset.notes = data.cleared ? '' : (data.notes || '');
             input.title = input.dataset.notes;
             const note = cell.querySelector('.ts-note');
@@ -215,51 +243,35 @@
             recalc();
         }
 
-        // Posts a cell. Returns the parsed response; callers decide how to react (a missing
-        // billable description comes back as {ok:false, needsDescription:true}).
-        async function post(cell, { hours, roleId, notes }) {
-            flash(cell, 'saving');
-            try {
-                const res = await fetch(saveUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'RequestVerificationToken': token },
-                    body: new URLSearchParams({
-                        projectId: cell.closest('tr').dataset.project,
-                        date: cell.dataset.date, hours, billingRoleId: roleId, notes: notes || ''
-                    })
-                });
-                const data = await res.json();
-                if (data.ok) { errorBox.classList.add('d-none'); flash(cell, data.cleared ? null : 'save-ok'); }
-                else if (!data.needsDescription) { errorBox.textContent = data.error || 'Could not save entry.'; errorBox.classList.remove('d-none'); flash(cell, 'save-err'); }
-                return data;
-            } catch {
-                errorBox.textContent = 'Could not reach the server. Try again.';
-                errorBox.classList.remove('d-none');
-                flash(cell, 'save-err');
-                return { ok: false };
-            }
+        // A grid cell as a save target for the popover/save flow.
+        function gridTarget(cell) {
+            const input = cell.querySelector('.ts-hours');
+            const tr = cell.closest('tr');
+            return {
+                projectId: tr.dataset.project, date: cell.dataset.date, roleId: rowRole(cell),
+                label: tr.querySelector('.ts-proj-label').textContent.trim(),
+                hours: input.value, notes: input.dataset.notes || '', flashEl: cell,
+                applySaved: data => applySavedGrid(cell, data),
+                revert: () => { input.value = input.dataset.prev || ''; recalc(); },
+            };
         }
 
         // ---- Description popover -------------------------------------------------
         const pop = document.getElementById('ts-pop');
         const popTitle = document.getElementById('ts-pop-title');
-        const popRole = document.getElementById('ts-pop-role');
         const popHours = document.getElementById('ts-pop-hours');
         const popNotes = document.getElementById('ts-pop-notes');
         const popErr = document.getElementById('ts-pop-err');
-        let popCell = null;
+        let popTarget = null;
 
-        function openPop(cell, prefillHours) {
-            popCell = cell;
-            const input = cell.querySelector('.ts-hours');
-            const tr = cell.closest('tr');
-            popTitle.textContent = tr.querySelector('.ts-code').textContent + ' · ' + cell.dataset.date;
-            popRole.value = rowRole(cell);
-            popHours.value = prefillHours != null ? prefillHours : input.value;
-            popNotes.value = input.dataset.notes || '';
+        function openPop(target, anchor, prefillHours, focusHours) {
+            popTarget = target;
+            popTitle.textContent = target.label + ' · ' + target.date;
+            popHours.value = prefillHours != null ? prefillHours : target.hours;
+            popNotes.value = target.notes || '';
             popErr.classList.add('d-none');
 
-            const r = cell.getBoundingClientRect();
+            const r = (anchor || target.flashEl).getBoundingClientRect();
             pop.classList.remove('d-none');
             const w = pop.offsetWidth, h = pop.offsetHeight;
             let left = window.scrollX + Math.min(r.left, window.innerWidth - w - 12);
@@ -267,26 +279,23 @@
             if (r.bottom + h + 8 > window.innerHeight) top = window.scrollY + r.top - h - 4;
             pop.style.left = Math.max(window.scrollX + 8, left) + 'px';
             pop.style.top = Math.max(window.scrollY + 8, top) + 'px';
-            popNotes.focus();
+            if (focusHours) { popHours.focus(); popHours.select(); }
+            else popNotes.focus();
         }
 
         function closePop(revert) {
-            if (popCell && revert) {
-                const input = popCell.querySelector('.ts-hours');
-                input.value = input.dataset.prev || '';
-                recalc();
-            }
+            if (popTarget && revert && popTarget.revert) popTarget.revert();
             pop.classList.add('d-none');
-            popCell = null;
+            popTarget = null;
         }
 
         document.getElementById('ts-pop-cancel').addEventListener('click', () => closePop(true));
 
         document.getElementById('ts-pop-save').addEventListener('click', async () => {
-            if (!popCell) return;
-            const roleId = popRole.value;
-            const data = await post(popCell, { hours: num(popHours.value), roleId, notes: popNotes.value });
-            if (data.ok) { applySaved(popCell, data, roleId, popNotes.value); closePop(false); }
+            if (!popTarget) return;
+            const t = popTarget;
+            const data = await postSave(t, num(popHours.value), t.roleId, popNotes.value);
+            if (data.ok) { t.applySaved(data); closePop(false); }
             else if (data.needsDescription) { popErr.textContent = data.error; popErr.classList.remove('d-none'); popNotes.focus(); }
             else { closePop(true); }
         });
@@ -297,7 +306,7 @@
         });
 
         grid.querySelectorAll('.ts-note').forEach(btn =>
-            btn.addEventListener('click', () => openPop(btn.closest('.ts-cell'))));
+            btn.addEventListener('click', () => openPop(gridTarget(btn.closest('.ts-cell')))));
 
         // ---- Inline hours entry --------------------------------------------------
         grid.querySelectorAll('.ts-hours').forEach(input => {
@@ -305,16 +314,162 @@
             input.addEventListener('change', async () => {
                 if (input.value === input.dataset.prev) return;
                 const cell = input.closest('.ts-cell');
+                const target = gridTarget(cell);
                 const hours = num(input.value);
-                const roleId = rowRole(cell);
-                const data = await post(cell, { hours, roleId, notes: input.dataset.notes });
-                if (data.ok) applySaved(cell, data, roleId, input.dataset.notes);
-                else if (data.needsDescription) openPop(cell, hours);      // collect the required description
-                else input.value = input.dataset.prev;                     // other error: revert
+                const data = await postSave(target, hours, target.roleId, input.dataset.notes);
+                if (data.ok) target.applySaved(data);
+                else if (data.needsDescription) openPop(target, cell, hours);   // collect the required description
+                else input.value = input.dataset.prev;                          // other error: revert
             });
         });
 
+        // ---- Daily view ----------------------------------------------------------
+        // A stacked, one-card-per-day view of a full calendar month, chosen with the month/year
+        // selectors and fetched on demand. Every assigned project shows for every day so time can
+        // be logged on any day; double-clicking a row's hours or description opens the editor.
+        const gridWrap = document.querySelector('.ts-wrap');
+        const dailyRoot = document.getElementById('ts-daily');
+        const dailyCards = document.getElementById('ts-daily-cards');
+        const monthSel = document.getElementById('ts-daily-month');
+        const yearSel = document.getElementById('ts-daily-year');
+        const dailyUrl = dailyRoot.dataset.url;
+        const todayIso = dailyRoot.dataset.today;
+        const layoutGridBtn = document.getElementById('ts-layout-grid');
+        const layoutDailyBtn = document.getElementById('ts-layout-daily');
+        const dash = '<span class="text-muted fst-italic">—</span>';
+
+        function dayLabel(iso) {
+            return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+        }
+
+        // Month/year selectors, defaulting to the server's current month.
+        (function initSelectors() {
+            const [ty, tm] = todayIso.split('-').map(Number);
+            for (let m = 1; m <= 12; m++) {
+                const o = document.createElement('option');
+                o.value = m;
+                o.textContent = new Date(2000, m - 1, 1).toLocaleDateString(undefined, { month: 'long' });
+                monthSel.appendChild(o);
+            }
+            for (let y = ty - 3; y <= ty + 1; y++) {
+                const o = document.createElement('option');
+                o.value = y; o.textContent = y;
+                yearSel.appendChild(o);
+            }
+            monthSel.value = tm; yearSel.value = ty;
+        })();
+
+        // A daily-view row as a save target.
+        function dailyTarget(tr) {
+            return {
+                projectId: tr.dataset.project, date: tr.dataset.date, roleId: tr.dataset.role,
+                label: tr.dataset.label, hours: tr.dataset.hours || '', notes: tr.dataset.notes || '',
+                flashEl: tr, applySaved: data => applySavedDaily(tr, data), revert: () => {},
+            };
+        }
+
+        function applySavedDaily(tr, data) {
+            tr.dataset.hours = data.cleared ? '' : show(data.hours, '');
+            tr.dataset.notes = data.cleared ? '' : (data.notes || '');
+            const h = num(tr.dataset.hours);
+            tr.querySelector('.ts-d-hours').innerHTML = h > 0 ? show(h, '0') : dash;
+            tr.querySelector('.ts-d-desc').innerHTML = tr.dataset.notes ? esc(tr.dataset.notes) : dash;
+            const card = tr.closest('.ts-day-card');
+            let total = 0;
+            card.querySelectorAll('tbody tr').forEach(r => total += num(r.dataset.hours));
+            card.querySelector('.ts-day-total').textContent = show(total, '0') + ' h';
+        }
+
+        function renderDaily(data) {
+            const frag = document.createDocumentFragment();
+            data.days.forEach(day => {
+                let total = 0;
+                const lines = data.projects.map(p => {
+                    const cell = p.cells[day.date];
+                    const h = cell ? num(cell.hours) : 0;
+                    total += h;
+                    const notes = cell ? (cell.notes || '') : '';
+                    const status = cell ? cell.status : 'open';
+                    const editable = !day.locked && status === 'open';
+                    return '<tr data-project="' + p.id + '" data-date="' + day.date + '" data-role="' + (p.roleId || '')
+                        + '" data-hours="' + (h > 0 ? show(h, '') : '') + '" data-notes="' + esc(notes)
+                        + '" data-label="' + esc(p.label) + '"' + (editable ? '' : ' class="ts-d-locked"') + '>'
+                        + '<td class="ts-d-proj">' + esc(p.label) + '</td>'
+                        + '<td class="ts-d-hours text-end">' + (h > 0 ? show(h, '0') : dash) + '</td>'
+                        + '<td class="ts-d-desc">' + (notes ? esc(notes) : dash) + '</td></tr>';
+                });
+                const body = data.projects.length
+                    ? '<div class="table-responsive"><table class="table table-sm ts-day-table mb-0">'
+                        + '<thead><tr><th>Project</th><th class="text-end ts-day-hcol">Hours</th><th>Description</th></tr></thead>'
+                        + '<tbody>' + lines.join('') + '</tbody></table></div>'
+                    : '<div class="card-body text-muted small">No assigned projects.</div>';
+                const weekday = new Date(day.date + 'T00:00:00').getDay();  // 0 Sun … 6 Sat
+                const isWeekend = weekday === 0 || weekday === 6;
+                const card = document.createElement('div');
+                card.className = 'card ts-day-card'
+                    + (isWeekend ? ' ts-day-weekend' : '')
+                    + (day.date === todayIso ? ' ts-day-today' : '');
+                card.innerHTML = '<div class="card-header d-flex justify-content-between align-items-center">'
+                    + '<span class="fw-semibold">' + esc(dayLabel(day.date)) + '</span>'
+                    + '<span class="text-muted small ts-day-total">' + show(total, '0') + ' h</span></div>' + body;
+                frag.appendChild(card);
+            });
+            dailyCards.replaceChildren(frag);
+            // Bring the current day into view when it's part of the month being shown.
+            dailyCards.querySelector('.ts-day-today')?.scrollIntoView({ block: 'center' });
+        }
+
+        async function loadDaily() {
+            dailyCards.innerHTML = '<div class="text-muted small p-2">Loading…</div>';
+            try {
+                const res = await fetch(dailyUrl + '?year=' + (+yearSel.value) + '&month=' + (+monthSel.value), { headers: { 'Accept': 'application/json' } });
+                renderDaily(await res.json());
+            } catch {
+                dailyCards.innerHTML = '<div class="alert alert-danger">Could not load the month. Try again.</div>';
+            }
+        }
+
+        dailyCards.addEventListener('dblclick', e => {
+            const td = e.target.closest('.ts-d-hours, .ts-d-desc');
+            if (!td) return;
+            const tr = td.closest('tr');
+            if (tr.classList.contains('ts-d-locked')) return;
+            openPop(dailyTarget(tr), td, undefined, true);   // focus the hours field for quick entry
+        });
+
+        monthSel.addEventListener('change', loadDaily);
+        yearSel.addEventListener('change', loadDaily);
+
+        // Persists the chosen layout server-side so it syncs across the user's devices.
+        const layoutUrl = dailyRoot.dataset.layoutUrl;
+        async function persistLayout(layout) {
+            try {
+                await fetch(layoutUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'RequestVerificationToken': token },
+                    body: new URLSearchParams({ layout })
+                });
+            } catch { /* preference is best-effort — a failed save just isn't remembered */ }
+        }
+
+        function setLayout(daily, persist = true) {
+            gridWrap.classList.toggle('d-none', daily);
+            dailyRoot.classList.toggle('d-none', !daily);
+            layoutDailyBtn.classList.toggle('btn-primary', daily);
+            layoutDailyBtn.classList.toggle('btn-outline-secondary', !daily);
+            layoutGridBtn.classList.toggle('btn-primary', !daily);
+            layoutGridBtn.classList.toggle('btn-outline-secondary', daily);
+            if (persist) persistLayout(daily ? 'daily' : 'grid');
+            if (daily) loadDaily();
+        }
+
+        layoutGridBtn.addEventListener('click', () => setLayout(false));
+        layoutDailyBtn.addEventListener('click', () => setLayout(true));
+
         recalc();
+
+        // Apply the layout the server remembers for this user (grid is the rendered default).
+        if (dailyRoot.dataset.initial === 'daily') setLayout(true, false);
     })();
 </script>
 }

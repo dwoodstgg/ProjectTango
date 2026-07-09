@@ -37,15 +37,16 @@ public class AssignmentRepository(NpgsqlDataSource dataSource) : IAssignmentRepo
         var rows = await connection.QueryAsync<AssignmentRow>(new CommandDefinition(
             """
             SELECT a.id, a.project_id, a.employee_id, a.default_billing_role_id, a.start_date, a.end_date,
-                   p.code AS project_code, p.name AS project_name
+                   p.code AS project_code, p.name AS project_name, c.name AS client_name
             FROM project_assignments a
             JOIN projects p ON p.id = a.project_id
+            JOIN clients c ON c.id = p.client_id
             WHERE a.employee_id = @employeeId
             ORDER BY p.code
             """,
             new { employeeId },
             cancellationToken: cancellationToken));
-        return rows.Select(row => new EmployeeAssignment(ToEntity(row), row.ProjectCode!, row.ProjectName!)).ToList();
+        return rows.Select(row => new EmployeeAssignment(ToEntity(row), row.ProjectCode!, row.ProjectName!, row.ClientName!)).ToList();
     }
 
     public async Task<ProjectAssignment?> GetAsync(Guid assignmentId, CancellationToken cancellationToken = default)
@@ -131,5 +132,6 @@ public class AssignmentRepository(NpgsqlDataSource dataSource) : IAssignmentRepo
         public string? DefaultRoleName { get; set; }
         public string? ProjectCode { get; set; }
         public string? ProjectName { get; set; }
+        public string? ClientName { get; set; }
     }
 }

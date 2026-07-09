@@ -1,6 +1,7 @@
 using ProjectTango.Application.Clients;
 using ProjectTango.Application.Common;
 using ProjectTango.Application.Employees;
+using ProjectTango.Application.Preferences;
 using ProjectTango.Application.Projects;
 using ProjectTango.Application.Roles;
 using ProjectTango.Application.TimeEntries;
@@ -250,7 +251,7 @@ public sealed class FakeAssignmentRepository : IAssignmentRepository
     public Task<IReadOnlyList<EmployeeAssignment>> GetForEmployeeAsync(Guid employeeId, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<EmployeeAssignment>>(Assignments
             .Where(a => a.EmployeeId == employeeId)
-            .Select(a => new EmployeeAssignment(a, "GEO-000", "project"))
+            .Select(a => new EmployeeAssignment(a, "GEO-000", "project", "client"))
             .ToList());
 
     public Task<ProjectAssignment?> GetAsync(Guid assignmentId, CancellationToken cancellationToken = default) =>
@@ -350,6 +351,20 @@ public sealed class FakeTimesheetPeriodRepository : ITimesheetPeriodRepository
             Periods.Add(period);
         }
 
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class FakeEmployeePreferenceRepository : IEmployeePreferenceRepository
+{
+    public Dictionary<(Guid, string), string> Values { get; } = [];
+
+    public Task<string?> GetAsync(Guid employeeId, string key, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Values.TryGetValue((employeeId, key), out var v) ? v : null);
+
+    public Task SetAsync(Guid employeeId, string key, string value, CancellationToken cancellationToken = default)
+    {
+        Values[(employeeId, key)] = value;
         return Task.CompletedTask;
     }
 }

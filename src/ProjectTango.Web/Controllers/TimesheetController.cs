@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using ProjectTango.Application.Preferences;
 using ProjectTango.Application.TimeEntries;
 using ProjectTango.Domain;
 using ProjectTango.Domain.Enums;
@@ -16,7 +17,8 @@ namespace ProjectTango.Web.Controllers;
 public class TimesheetController(
     TimesheetService timesheet,
     TimeEntryService timeEntries,
-    TimesheetPeriodService periods) : Controller
+    TimesheetPeriodService periods,
+    PreferenceService preferences) : Controller
 {
     public async Task<IActionResult> Index(DateOnly? anchor, string? view, CancellationToken cancellationToken)
     {
@@ -89,6 +91,7 @@ public class TimesheetController(
                 ProjectId = p.ProjectId,
                 Code = p.Code,
                 Name = p.Name,
+                ClientName = p.ClientName,
                 DefaultBillingRoleId = p.DefaultBillingRoleId ?? my.BillableRoles.FirstOrDefault()?.Id,
                 Cells = cells,
             };
@@ -97,6 +100,7 @@ public class TimesheetController(
         var model = new TimesheetGridViewModel
         {
             ViewMode = mode,
+            InitialLayout = await preferences.GetTimesheetLayoutAsync(cancellationToken) ?? "grid",
             RangeLabel = label,
             CurrentAnchor = at,
             PrevAnchor = prevAnchor,
@@ -107,6 +111,71 @@ public class TimesheetController(
             BillableRoleOptions = my.BillableRoles.Select(r => new SelectListItem(r.DisplayName, r.Id.ToString())).ToList(),
         };
         return View(model);
+    }
+
+    /// <summary>JSON feed for the daily view: every assigned project plus the caller's entries
+    /// for a full calendar month, so time can be logged on any day of the chosen month.</summary>
+    public async Task<IActionResult> DailyMonth(int year, int month, CancellationToken cancellationToken)
+    {
+        if (User.GetEmployeeId() is null || month is < 1 or > 12 || year is < 2000 or > 2100)
+        {
+            return Json(new { days = Array.Empty<object>(), projects = Array.Empty<object>() });
+        }
+
+        var rangeStart = new DateOnly(year, month, 1);
+        var rangeEnd = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
+
+        var my = await timesheet.GetMyRangeAsync(rangeStart, rangeEnd, cancellationToken);
+        var closedStarts = (await periods.ListInRangeAsync(rangeStart, rangeEnd, cancellationToken))
+            .Where(p => p.Status == TimesheetPeriodStatus.Closed)
+            .Select(p => p.PeriodStart)
+            .ToHashSet();
+        bool IsLocked(DateOnly date) => closedStarts.Contains(SemiMonthlyPeriod.Containing(date).Start);
+
+        var days = new List<object>();
+        for (var date = rangeStart; date <= rangeEnd; date = date.AddDays(1))
+        {
+            days.Add(new { date = date.ToString("yyyy-MM-dd"), locked = IsLocked(date) });
+        }
+
+        var entriesByProject = my.Entries
+            .GroupBy(e => e.ProjectId)
+            .ToDictionary(g => g.Key, g => g.ToDictionary(e => e.EntryDate.ToString("yyyy-MM-dd"), e => e));
+
+        var fallbackRole = my.BillableRoles.FirstOrDefault()?.Id;
+        var projects = my.Projects.Select(p =>
+        {
+            entriesByProject.TryGetValue(p.ProjectId, out var byDate);
+            var cells = (byDate ?? []).ToDictionary(
+                kv => kv.Key,
+                kv => (object)new { hours = kv.Value.HoursWorked, notes = kv.Value.Notes ?? "", status = DbStatus(kv.Value.Status) });
+            return new
+            {
+                id = p.ProjectId,
+                label = $"{p.ClientName} – {p.Name}",
+                roleId = p.DefaultBillingRoleId ?? fallbackRole,
+                cells,
+            };
+        }).ToList();
+
+        return Json(new { days, projects });
+    }
+
+    /// <summary>Persists the user's chosen timesheet layout (grid/daily) so it follows them
+    /// across devices. Best-effort: a bad value or unlinked account is a no-op.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetLayout(string layout, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await preferences.SetTimesheetLayoutAsync(layout, cancellationToken);
+            return Json(new { ok = true });
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException)
+        {
+            return Json(new { ok = false });
+        }
     }
 
     [HttpPost]

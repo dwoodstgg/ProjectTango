@@ -8,6 +8,10 @@ public class TimesheetGridViewModel
     public string ViewMode { get; init; } = "week";
     public bool IsWeek => ViewMode != "month";
 
+    /// <summary>The user's saved layout, "grid" (default) or "daily". The grid renders
+    /// server-side; the client switches to daily on load when this is "daily".</summary>
+    public string InitialLayout { get; init; } = "grid";
+
     public string RangeLabel { get; init; } = "";
 
     /// <summary>Anchor dates for the prev/next/today links, in the current view's step.</summary>
@@ -35,6 +39,7 @@ public class TimesheetRowVm
     public Guid ProjectId { get; init; }
     public string Code { get; init; } = "";
     public string Name { get; init; } = "";
+    public string ClientName { get; init; } = "";
     public Guid? DefaultBillingRoleId { get; init; }
 
     /// <summary>Day-of-month → the cell entry, when one exists.</summary>

@@ -214,9 +214,8 @@ body {
 }
 
 .ts-grid thead .ts-proj { z-index: 3; background: #f8f9fa; }
-.ts-grid .ts-proj .ts-code { font-weight: 600; color: #1f2933; letter-spacing: -.01em; }
-.ts-grid .ts-proj .ts-name { color: #868e96; font-size: .9em; margin-bottom: .4rem; }
-.ts-grid .ts-proj .form-select-sm { max-width: 100%; }
+.ts-grid .ts-proj .ts-proj-label { font-weight: 600; color: #1f2933; letter-spacing: -.01em; line-height: 1.3; }
+.ts-grid .ts-proj .ts-proj-label .ts-proj-client { color: #495057; font-weight: 500; }
 
 .ts-grid tbody tr:hover td { background: #fcfcfd; }
 .ts-grid tbody tr:hover .ts-proj { background: #fcfcfd; }
@@ -293,3 +292,37 @@ body {
   padding: .85rem;
 }
 .ts-pop-title { font-weight: 600; color: #1f2933; margin-bottom: .5rem; font-size: .85rem; }
+
+/* Daily view — one card per day, stacked vertically and centered down the full month. */
+.ts-daily-cards {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+.ts-day-card { width: 100%; max-width: 60rem; }
+.ts-day-card .card-header { background: #f8f9fa; padding: .6rem 1rem; }
+.ts-day-table td, .ts-day-table th { padding: .5rem 1rem; }
+/* Weekends: a slight gray break from workdays (time can still be entered). */
+.ts-day-card.ts-day-weekend { background: #f4f5f7; }
+.ts-day-card.ts-day-weekend .card-header { background: #e9ebef; color: #6c757d; }
+.ts-day-card.ts-day-weekend .ts-day-table { --bs-table-bg: transparent; }
+.ts-day-card.ts-day-today { border-color: #9ec5fe; }
+.ts-day-card.ts-day-today .card-header { background: #e7f1ff; color: #0d6efd; }
+.ts-day-table { font-size: .85rem; }
+.ts-day-table th { font-weight: 600; color: #495057; font-size: .78rem; }
+.ts-day-table .ts-day-hcol { width: 5rem; }
+.ts-day-table .ts-d-hours,
+.ts-day-table .ts-d-desc { cursor: pointer; }
+.ts-day-table .ts-d-hours:hover,
+.ts-day-table .ts-d-desc:hover { background: #f3f8ff; }
+.ts-day-card .ts-d-locked td { color: #868e96; }
+.ts-day-card .ts-d-locked .ts-d-hours,
+.ts-day-card .ts-d-locked .ts-d-desc { cursor: default; }
+.ts-day-card .ts-d-locked .ts-d-hours:hover,
+.ts-day-card .ts-d-locked .ts-d-desc:hover { background: transparent; }
+
+/* Save feedback on a daily row (mirrors the grid cell states). */
+.ts-day-table tr.saving td { background: #fff3cd; }
+.ts-day-table tr.save-ok td { background: #d1e7dd; transition: background .5s; }
+.ts-day-table tr.save-err td { background: #f8d7da; }

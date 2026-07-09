@@ -5,7 +5,7 @@ using ProjectTango.Domain.Entities;
 
 namespace ProjectTango.Application.TimeEntries;
 
-public record TimesheetProject(Guid ProjectId, string Code, string Name, Guid? DefaultBillingRoleId);
+public record TimesheetProject(Guid ProjectId, string Code, string Name, string ClientName, Guid? DefaultBillingRoleId);
 
 public record BillableRoleOption(Guid Id, string DisplayName);
 
@@ -38,7 +38,7 @@ public class TimesheetService(
         var myAssignments = await assignments.GetForEmployeeAsync(me, cancellationToken);
         var projects = myAssignments
             .Where(a => Overlaps(a.Assignment, from, to) || projectsWithEntries.Contains(a.Assignment.ProjectId))
-            .Select(a => new TimesheetProject(a.Assignment.ProjectId, a.ProjectCode, a.ProjectName, a.Assignment.DefaultBillingRoleId))
+            .Select(a => new TimesheetProject(a.Assignment.ProjectId, a.ProjectCode, a.ProjectName, a.ClientName, a.Assignment.DefaultBillingRoleId))
             .DistinctBy(p => p.ProjectId)
             .OrderBy(p => p.Code)
             .ToList();

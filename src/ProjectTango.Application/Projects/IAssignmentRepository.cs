@@ -6,7 +6,7 @@ public record AssignmentSummary(ProjectAssignment Assignment, string EmployeeNam
 
 /// <summary>An employee's assignment joined with the project it grants access to (for the
 /// employee's own timesheet grid).</summary>
-public record EmployeeAssignment(ProjectAssignment Assignment, string ProjectCode, string ProjectName);
+public record EmployeeAssignment(ProjectAssignment Assignment, string ProjectCode, string ProjectName, string ClientName);
 
 public interface IAssignmentRepository
 {

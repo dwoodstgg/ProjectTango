@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using ProjectTango.Application.Clients;
 using ProjectTango.Application.Employees;
+using ProjectTango.Application.Preferences;
 using ProjectTango.Application.Projects;
 using ProjectTango.Application.Roles;
 using ProjectTango.Application.TimeEntries;
@@ -23,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<TimeEntryService>();
         services.AddScoped<ApprovalService>();
         services.AddScoped<TimesheetPeriodService>();
+        services.AddScoped<PreferenceService>();
         return services;
     }
 }
