@@ -75,20 +75,23 @@
                 <p class="text-muted small mb-2">
                     Rates are effective-dated per billing role. A change closes the current rate the day
                     before and starts a new one — history is never edited, past entries never re-price.
+                    <strong>Edit</strong> is for fixing a mistaken entry, not a rate change; it's locked
+                    once a rate has priced invoiced time.
                 </p>
                 <table class="table table-sm align-middle">
                     <thead>
-                        <tr><th>Billing role</th><th class="text-end">Rate</th><th>Effective</th><th></th></tr>
+                        <tr><th>Billing role</th><th class="text-end">Rate</th><th>Effective</th><th></th><th class="text-end"></th></tr>
                     </thead>
                     <tbody>
                         @if (Model.Rates.Count == 0)
                         {
-                            <tr><td colspan="4" class="text-muted">No rates yet — time can't be approved without one.</td></tr>
+                            <tr><td colspan="5" class="text-muted">No rates yet — time can't be approved without one.</td></tr>
                         }
                         @foreach (var rate in Model.Rates)
                         {
                             var rc = rate.RateCard;
                             var current = rc.EffectiveTo is null;
+                            var editId = $"rate-edit-{rc.Id}";
                             <tr class="@(current ? null : "text-muted")">
                                 <td>@rate.RoleName</td>
                                 <td class="text-end">@rc.HourlyRate.ToString("C2")/hr</td>
@@ -96,7 +99,49 @@
                                     @rc.EffectiveFrom.ToString("yyyy-MM-dd") → @(rc.EffectiveTo?.ToString("yyyy-MM-dd") ?? "open")
                                 </td>
                                 <td>@if (current) { <span class="badge text-bg-success">current</span> }</td>
+                                <td class="text-end text-nowrap">
+                                    @if (rate.HasBilledTime)
+                                    {
+                                        <span class="text-muted small" title="Invoiced time is billed at this rate — void the invoice to change it">🔒 billed</span>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                data-bs-toggle="collapse" data-bs-target="#@editId" aria-expanded="false">Edit</button>
+                                        <form asp-action="DeleteRate" asp-route-id="@project.Id" method="post" class="d-inline"
+                                              onsubmit="return confirm('Remove this rate row? Use this to fix a mistaken entry, not to record a rate change.');">
+                                            <input type="hidden" name="rateCardId" value="@rc.Id" />
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                        </form>
+                                    }
+                                </td>
                             </tr>
+                            @if (!rate.HasBilledTime)
+                            {
+                                <tr class="collapse" id="@editId">
+                                    <td colspan="5" class="bg-body-tertiary">
+                                        <form asp-action="CorrectRate" asp-route-id="@project.Id" method="post" class="row g-2 align-items-end">
+                                            <input type="hidden" name="rateCardId" value="@rc.Id" />
+                                            <div class="col-auto">
+                                                <label class="form-label small mb-1">Hourly rate</label>
+                                                <input name="hourlyRate" type="number" step="0.01" min="0" value="@rc.HourlyRate.ToString("0.00")"
+                                                       class="form-control form-control-sm" style="width: 8rem" required />
+                                            </div>
+                                            <div class="col-auto">
+                                                <label class="form-label small mb-1">Effective from</label>
+                                                <input name="effectiveFrom" type="date" value="@rc.EffectiveFrom.ToString("yyyy-MM-dd")"
+                                                       class="form-control form-control-sm" required />
+                                            </div>
+                                            <div class="col-auto">
+                                                <button type="submit" class="btn btn-sm btn-primary">Save correction</button>
+                                            </div>
+                                            <div class="col-12">
+                                                <span class="text-muted small">Corrects a mistaken entry in place — not a rate change. Invoiced history never re-prices.</span>
+                                            </div>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
                         }
                     </tbody>
                 </table>

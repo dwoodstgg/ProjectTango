@@ -107,6 +107,23 @@ public class ProjectsController(
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CorrectRate(
+        Guid id, Guid rateCardId, decimal hourlyRate, DateOnly effectiveFrom, CancellationToken cancellationToken)
+    {
+        return await RunAndReturnToManage(id, () =>
+            rateCardService.CorrectRateAsync(id, rateCardId, hourlyRate, effectiveFrom, cancellationToken));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteRate(Guid id, Guid rateCardId, CancellationToken cancellationToken)
+    {
+        return await RunAndReturnToManage(id, () =>
+            rateCardService.DeleteRateAsync(id, rateCardId, cancellationToken));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Assign(
         Guid id, Guid employeeId, Guid? defaultBillingRoleId, DateOnly? startDate, CancellationToken cancellationToken)
     {

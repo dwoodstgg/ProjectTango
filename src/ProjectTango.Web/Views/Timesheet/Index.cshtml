@@ -22,14 +22,6 @@
             <a class="btn btn-sm @(Model.IsWeek ? "btn-outline-secondary" : "btn-primary")"
                asp-action="Index" asp-route-view="month" asp-route-anchor="@Model.CurrentAnchor.ToString("yyyy-MM-dd")">Month</a>
         </div>
-        <div class="btn-group" role="group" aria-label="Navigation">
-            <a class="btn btn-outline-secondary btn-sm" asp-action="Index"
-               asp-route-view="@Model.ViewMode" asp-route-anchor="@Model.PrevAnchor.ToString("yyyy-MM-dd")">&laquo; Prev</a>
-            <a class="btn btn-outline-secondary btn-sm" asp-action="Index"
-               asp-route-view="@Model.ViewMode" asp-route-anchor="@Model.TodayAnchor.ToString("yyyy-MM-dd")">@(Model.IsWeek ? "This week" : "This month")</a>
-            <a class="btn btn-outline-secondary btn-sm" asp-action="Index"
-               asp-route-view="@Model.ViewMode" asp-route-anchor="@Model.NextAnchor.ToString("yyyy-MM-dd")">Next &raquo;</a>
-        </div>
     </div>
 </div>
 
@@ -91,7 +83,8 @@
                         var editable = !d.Locked && status == "open";
                         <td class="ts-cell @(d.IsWeekend ? "ts-weekend" : "") @(d.Date == today ? "ts-today" : "") @(status == "approved" || status == "invoiced" ? "approved" : "")"
                             data-date="@d.Date.ToString("yyyy-MM-dd")">
-                            <input type="number" class="ts-hours" min="0" max="24" step="0.25"
+                            <input type="text" inputmode="decimal" maxlength="5" autocomplete="off"
+                                   class="ts-hours"
                                    value="@(cell is null ? "" : Fmt(cell.Hours))"
                                    title="@(cell?.Notes)"
                                    data-role="@(cell?.BillingRoleId)"
@@ -120,6 +113,17 @@
             </tr>
         </tfoot>
     </table>
+</div>
+
+<div id="ts-grid-nav" class="d-flex justify-content-center mt-3">
+    <div class="btn-group" role="group" aria-label="Navigation">
+        <a class="btn btn-outline-secondary btn-sm" asp-action="Index"
+           asp-route-view="@Model.ViewMode" asp-route-anchor="@Model.PrevAnchor.ToString("yyyy-MM-dd")">&laquo; Prev</a>
+        <a class="btn btn-outline-secondary btn-sm" asp-action="Index"
+           asp-route-view="@Model.ViewMode" asp-route-anchor="@Model.TodayAnchor.ToString("yyyy-MM-dd")">@(Model.IsWeek ? "This week" : "This month")</a>
+        <a class="btn btn-outline-secondary btn-sm" asp-action="Index"
+           asp-route-view="@Model.ViewMode" asp-route-anchor="@Model.NextAnchor.ToString("yyyy-MM-dd")">Next &raquo;</a>
+    </div>
 </div>
 
 <div id="ts-daily" class="d-none" data-today="@today.ToString("yyyy-MM-dd")"
@@ -311,6 +315,15 @@
         // ---- Inline hours entry --------------------------------------------------
         grid.querySelectorAll('.ts-hours').forEach(input => {
             input.dataset.prev = input.value;
+            // Select the contents on focus so tabbing/arrowing into a cell lets you type over
+            // whatever's there — no mouse needed to replace a value.
+            input.addEventListener('focus', () => input.select());
+            // Keep the field numeric (type="text" gives us caret info for arrow-key nav, so we
+            // police the characters ourselves): digits and a single decimal point.
+            input.addEventListener('input', () => {
+                const clean = input.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+                if (clean !== input.value) input.value = clean;
+            });
             input.addEventListener('change', async () => {
                 if (input.value === input.dataset.prev) return;
                 const cell = input.closest('.ts-cell');
@@ -323,11 +336,53 @@
             });
         });
 
+        // ---- Spreadsheet keyboard navigation -------------------------------------
+        // Tab/Shift+Tab already walk across the day columns. These add Excel-style vertical
+        // movement (Enter and ↑/↓) plus edge-aware ←/→, so the whole grid is reachable and
+        // editable from the keyboard alone. Every row renders every day, so column indexes line up.
+        const navRows = Array.from(grid.querySelectorAll('tbody tr'));
+        const rowInputs = tr => Array.from(tr.querySelectorAll('.ts-hours'));
+
+        // Move focus from `from` by (dRow, dCol), skipping disabled (locked/approved) cells and
+        // stopping at the grid edges.
+        function moveFocus(from, dRow, dCol) {
+            const tr = from.closest('tr');
+            let r = navRows.indexOf(tr);
+            let c = rowInputs(tr).indexOf(from);
+            if (r < 0 || c < 0) return;
+            for (;;) {
+                r += dRow; c += dCol;
+                if (r < 0 || r >= navRows.length) return;
+                const inputs = rowInputs(navRows[r]);
+                if (c < 0 || c >= inputs.length) return;
+                if (!inputs[c].disabled) { inputs[c].focus(); return; }  // focus handler selects
+            }
+        }
+
+        grid.querySelectorAll('.ts-hours').forEach(input => {
+            input.addEventListener('keydown', e => {
+                if (e.altKey || e.ctrlKey || e.metaKey) return;
+                const len = input.value.length;
+                const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
+                const atEnd = input.selectionStart === len && input.selectionEnd === len;
+                switch (e.key) {
+                    case 'ArrowUp': e.preventDefault(); moveFocus(input, -1, 0); break;
+                    case 'ArrowDown': e.preventDefault(); moveFocus(input, 1, 0); break;
+                    case 'Enter': e.preventDefault(); moveFocus(input, e.shiftKey ? -1 : 1, 0); break;
+                    // Only leave the cell once the caret is already at the matching edge, so ←/→
+                    // still move within a multi-character value like "0.25".
+                    case 'ArrowLeft': if (atStart) { e.preventDefault(); moveFocus(input, 0, -1); } break;
+                    case 'ArrowRight': if (atEnd) { e.preventDefault(); moveFocus(input, 0, 1); } break;
+                }
+            });
+        });
+
         // ---- Daily view ----------------------------------------------------------
         // A stacked, one-card-per-day view of a full calendar month, chosen with the month/year
         // selectors and fetched on demand. Every assigned project shows for every day so time can
         // be logged on any day; double-clicking a row's hours or description opens the editor.
         const gridWrap = document.querySelector('.ts-wrap');
+        const gridNav = document.getElementById('ts-grid-nav');
         const dailyRoot = document.getElementById('ts-daily');
         const dailyCards = document.getElementById('ts-daily-cards');
         const monthSel = document.getElementById('ts-daily-month');
@@ -454,6 +509,7 @@
 
         function setLayout(daily, persist = true) {
             gridWrap.classList.toggle('d-none', daily);
+            gridNav.classList.toggle('d-none', daily);
             dailyRoot.classList.toggle('d-none', !daily);
             layoutDailyBtn.classList.toggle('btn-primary', daily);
             layoutDailyBtn.classList.toggle('btn-outline-secondary', !daily);

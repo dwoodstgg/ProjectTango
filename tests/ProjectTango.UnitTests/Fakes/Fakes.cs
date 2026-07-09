@@ -205,12 +205,24 @@ public sealed class FakeRateCardRepository(FakeRoleRepository roles) : IRateCard
 {
     public List<ProjectRateCard> Rates { get; } = [];
     public List<(Guid RateCardId, DateOnly EffectiveTo)> Closed { get; } = [];
+    public List<Guid> Deleted { get; } = [];
+
+    /// <summary>Invoiced time entries (project, role, date) used to decide whether a rate is frozen.</summary>
+    public List<(Guid ProjectId, Guid RoleId, DateOnly Date)> InvoicedTime { get; } = [];
+
+    private bool HasInvoiced(Guid projectId, Guid roleId, DateOnly from, DateOnly? to) =>
+        InvoicedTime.Any(t => t.ProjectId == projectId && t.RoleId == roleId
+            && t.Date >= from && (to is null || t.Date <= to));
 
     public Task<IReadOnlyList<RateCardSummary>> GetForProjectAsync(Guid projectId, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<RateCardSummary>>(Rates
             .Where(r => r.ProjectId == projectId)
-            .Select(r => new RateCardSummary(r, roles.Roles.Single(x => x.Id == r.RoleId).Name))
+            .Select(r => new RateCardSummary(r, roles.Roles.Single(x => x.Id == r.RoleId).Name,
+                HasInvoiced(r.ProjectId, r.RoleId, r.EffectiveFrom, r.EffectiveTo)))
             .ToList());
+
+    public Task<ProjectRateCard?> GetByIdAsync(Guid rateCardId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Rates.FirstOrDefault(r => r.Id == rateCardId));
 
     public Task<IReadOnlyList<ProjectRateCard>> GetForRoleAsync(Guid projectId, Guid roleId, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<ProjectRateCard>>(Rates
@@ -228,6 +240,39 @@ public sealed class FakeRateCardRepository(FakeRoleRepository roles) : IRateCard
     {
         Rates.Single(r => r.Id == rateCardId).EffectiveTo = effectiveTo;
         Closed.Add((rateCardId, effectiveTo));
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> HasInvoicedTimeAsync(
+        Guid projectId, Guid roleId, DateOnly effectiveFrom, DateOnly? effectiveTo,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(HasInvoiced(projectId, roleId, effectiveFrom, effectiveTo));
+
+    public Task CorrectAsync(
+        Guid rateCardId, decimal hourlyRate, DateOnly effectiveFrom,
+        Guid? priorRowId, DateOnly? priorEffectiveTo,
+        CancellationToken cancellationToken = default)
+    {
+        var row = Rates.Single(r => r.Id == rateCardId);
+        row.HourlyRate = hourlyRate;
+        row.EffectiveFrom = effectiveFrom;
+        if (priorRowId is not null)
+        {
+            Rates.Single(r => r.Id == priorRowId).EffectiveTo = priorEffectiveTo;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task SoftDeleteAsync(Guid rateCardId, Guid? reopenPriorRowId, CancellationToken cancellationToken = default)
+    {
+        Rates.RemoveAll(r => r.Id == rateCardId);
+        Deleted.Add(rateCardId);
+        if (reopenPriorRowId is not null)
+        {
+            Rates.Single(r => r.Id == reopenPriorRowId).EffectiveTo = null;
+        }
+
         return Task.CompletedTask;
     }
 
