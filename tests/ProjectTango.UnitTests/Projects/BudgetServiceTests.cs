@@ -18,7 +18,7 @@ public class BudgetServiceTests
 
     public BudgetServiceTests()
     {
-        _service = new BudgetService(_currentUser, _projects, _budgets, _audit);
+        _service = new BudgetService(_currentUser, _projects, _budgets, _audit, new FakeBudgetAlertService());
         _project = new Project
         {
             Id = Guid.NewGuid(),

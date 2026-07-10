@@ -15,7 +15,8 @@ public class ApprovalService(
     IProjectRepository projects,
     ITimeEntryRepository entries,
     IRateCardRepository rateCards,
-    IAuditLog audit)
+    IAuditLog audit,
+    IBudgetAlertService budgetAlerts)
 {
     public async Task<IReadOnlyList<ApprovalEntry>> ListForApprovalAsync(
         Guid projectId, DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
@@ -69,6 +70,9 @@ public class ApprovalService(
                 HoursBilled = hoursBilled,
                 adminOverride,
             }), cancellationToken);
+
+        // Approving raises billable burn — re-check budget thresholds.
+        await budgetAlerts.EvaluateAsync(entry.ProjectId, cancellationToken);
     }
 
     /// <summary>Approves several open entries at their current hours_billed (bulk per period).

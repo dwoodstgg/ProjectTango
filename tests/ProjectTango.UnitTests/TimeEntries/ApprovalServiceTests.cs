@@ -23,7 +23,7 @@ public class ApprovalServiceTests
     public ApprovalServiceTests()
     {
         _rateCards = new FakeRateCardRepository(_roles);
-        _service = new ApprovalService(_currentUser, _projects, _entries, _rateCards, _audit);
+        _service = new ApprovalService(_currentUser, _projects, _entries, _rateCards, _audit, new FakeBudgetAlertService());
 
         _project = new Project
         {

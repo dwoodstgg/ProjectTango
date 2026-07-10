@@ -110,22 +110,22 @@ public class ProjectDashboardService(
         var totals = new DashboardTotals(
             HoursWorked: rows.Sum(r => r.HoursWorked),
             HoursBilled: rows.Sum(r => r.HoursBilled),
-            ApprovedValue: rows.Where(r => r.Status == TimeEntryStatus.Approved).Sum(Value),
-            InvoicedValue: rows.Where(r => r.Status == TimeEntryStatus.Invoiced).Sum(Value),
-            PendingValue: rows.Where(r => r.Status == TimeEntryStatus.Open).Sum(Value),
+            ApprovedValue: rows.Where(r => r.Status == TimeEntryStatus.Approved).Sum(BudgetBurn.RowValue),
+            InvoicedValue: rows.Where(r => r.Status == TimeEntryStatus.Invoiced).Sum(BudgetBurn.RowValue),
+            PendingValue: rows.Where(r => r.Status == TimeEntryStatus.Open).Sum(BudgetBurn.RowValue),
             OpenCount: rows.Count(r => r.Status == TimeEntryStatus.Open),
             ApprovedCount: rows.Count(r => r.Status == TimeEntryStatus.Approved),
             InvoicedCount: rows.Count(r => r.Status == TimeEntryStatus.Invoiced));
 
         var byRole = rows
             .GroupBy(r => r.RoleName)
-            .Select(g => new RoleBurn(g.Key, g.Sum(r => r.HoursWorked), g.Sum(r => r.HoursBilled), g.Sum(Value)))
+            .Select(g => new RoleBurn(g.Key, g.Sum(r => r.HoursWorked), g.Sum(r => r.HoursBilled), g.Sum(BudgetBurn.RowValue)))
             .OrderByDescending(r => r.HoursWorked)
             .ToList();
 
         var byPerson = rows
             .GroupBy(r => r.EmployeeName)
-            .Select(g => new PersonBurn(g.Key, g.Sum(r => r.HoursWorked), g.Sum(r => r.HoursBilled), g.Sum(Value)))
+            .Select(g => new PersonBurn(g.Key, g.Sum(r => r.HoursWorked), g.Sum(r => r.HoursBilled), g.Sum(BudgetBurn.RowValue)))
             .OrderByDescending(p => p.HoursWorked)
             .ToList();
 
@@ -136,16 +136,7 @@ public class ProjectDashboardService(
             .ToList();
 
         var budget = await budgets.GetForProjectAsync(projectId, cancellationToken);
-        var budgetStatus = budget is null ? null : new BudgetStatus(
-            Type: budget.Type,
-            AmountBudget: budget.Amount,
-            HoursBudget: budget.Hours,
-            AlertThresholds: budget.AlertThresholds,
-            SpentValue: totals.BillableValue,
-            PendingValue: totals.PendingValue,
-            // Hours mirror the value split: billed hours once approved/invoiced, worked while open.
-            SpentHours: rows.Where(r => r.Status != TimeEntryStatus.Open).Sum(r => r.HoursBilled),
-            PendingHours: rows.Where(r => r.Status == TimeEntryStatus.Open).Sum(r => r.HoursWorked));
+        var budgetStatus = budget is null ? null : BudgetBurn.Compute(budget, rows);
 
         return new ProjectDashboard
         {
@@ -160,19 +151,5 @@ public class ProjectDashboardService(
             Budget = budgetStatus,
             HasRateGaps = rows.Any(r => r is { IsBillable: true, ResolvedRate: null }),
         };
-    }
-
-    /// <summary>Dollar value of a row: billable hours × resolved rate. Open work is valued on
-    /// hours_worked (an estimate); approved/invoiced on hours_billed (the billing decision).
-    /// Non-billable work and entries without a rate contribute nothing.</summary>
-    private static decimal Value(BurnRow row)
-    {
-        if (!row.IsBillable || row.ResolvedRate is null)
-        {
-            return 0m;
-        }
-
-        var hours = row.Status == TimeEntryStatus.Open ? row.HoursWorked : row.HoursBilled;
-        return hours * row.ResolvedRate.Value;
     }
 }

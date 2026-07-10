@@ -23,7 +23,8 @@ public class TimeEntryService(
     IRoleRepository roles,
     ITimeEntryRepository entries,
     IRateCardRepository rateCards,
-    ITimesheetPeriodRepository periods)
+    ITimesheetPeriodRepository periods,
+    IBudgetAlertService budgetAlerts)
 {
     /// <summary>Records <paramref name="hours"/> for the cell, creating or updating the open
     /// entry. Zero hours clears the cell (removes the open entry). Returns the entry, or null
@@ -88,6 +89,7 @@ public class TimeEntryService(
             existing.IsBillable = isBillable;
             await AutoApproveAsync(existing, cancellationToken);
             await entries.UpdateAsync(existing, cancellationToken);
+            await budgetAlerts.EvaluateAsync(project.Id, cancellationToken);
             return existing;
         }
 
@@ -106,6 +108,7 @@ public class TimeEntryService(
         };
         await AutoApproveAsync(entry, cancellationToken);
         await entries.AddAsync(entry, cancellationToken);
+        await budgetAlerts.EvaluateAsync(project.Id, cancellationToken);
         return entry;
     }
 

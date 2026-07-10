@@ -13,7 +13,8 @@ public class BudgetService(
     ICurrentUser currentUser,
     IProjectRepository projects,
     IBudgetRepository budgets,
-    IAuditLog audit)
+    IAuditLog audit,
+    IBudgetAlertService budgetAlerts)
 {
     public async Task<Budget?> GetAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
@@ -115,6 +116,9 @@ public class BudgetService(
                 revision.Reason,
                 adminOverride,
             }), cancellationToken);
+
+        // Re-arm thresholds against the new budget and flag immediately if it's already breached.
+        await budgetAlerts.OnBudgetChangedAsync(projectId, cancellationToken);
     }
 
     /// <summary>Keeps thresholds sane: whole percents in 1..100, de-duplicated and sorted.

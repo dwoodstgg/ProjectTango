@@ -104,6 +104,21 @@ public class EmployeeRepository(NpgsqlDataSource dataSource) : IEmployeeReposito
             cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyList<string>> GetActiveEmailsInRoleAsync(string roleName, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var emails = await connection.QueryAsync<string>(new CommandDefinition(
+            """
+            SELECT DISTINCT e.email FROM employees e
+            JOIN employee_roles er ON er.employee_id = e.id
+            JOIN roles r ON r.id = er.role_id
+            WHERE e.is_active AND r.name = @roleName
+            """,
+            new { roleName },
+            cancellationToken: cancellationToken));
+        return emails.ToList();
+    }
+
     public async Task<Employee?> GetByEntraOidAsync(string entraOid, CancellationToken cancellationToken = default)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);

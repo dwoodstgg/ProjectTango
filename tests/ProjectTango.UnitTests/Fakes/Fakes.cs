@@ -144,6 +144,16 @@ public sealed class FakeEmployeeRepository(FakeRoleRepository roles) : IEmployee
             e.IsActive && RoleIdsByEmployee.GetValueOrDefault(e.Id, []).Overlaps(adminRoleIds));
         return Task.FromResult(count);
     }
+
+    public Task<IReadOnlyList<string>> GetActiveEmailsInRoleAsync(string roleName, CancellationToken cancellationToken = default)
+    {
+        var roleIds = roles.Roles.Where(r => r.Name == roleName).Select(r => r.Id).ToHashSet();
+        IReadOnlyList<string> emails = Employees
+            .Where(e => e.IsActive && RoleIdsByEmployee.GetValueOrDefault(e.Id, []).Overlaps(roleIds))
+            .Select(e => e.Email)
+            .ToList();
+        return Task.FromResult(emails);
+    }
 }
 
 public sealed class FakeClientRepository : IClientRepository
@@ -311,6 +321,64 @@ public sealed class FakeBudgetRepository : IBudgetRepository
             .OrderByDescending(r => r.RevisedAt)
             .Select(r => new BudgetRevisionSummary(r, RevisedByName))
             .ToList());
+}
+
+public sealed class FakeEmailSender : IEmailSender
+{
+    public List<EmailMessage> Sent { get; } = [];
+
+    public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
+    {
+        Sent.Add(message);
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class FakeBudgetAlertRepository : IBudgetAlertRepository
+{
+    public List<BudgetAlert> Alerts { get; } = [];
+
+    public Task<IReadOnlySet<string>> GetFiredKeysAsync(Guid budgetId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlySet<string>>(Alerts
+            .Where(a => a.BudgetId == budgetId)
+            .Select(a => a.AlertKey)
+            .ToHashSet(StringComparer.Ordinal));
+
+    public Task RecordAsync(BudgetAlert alert, CancellationToken cancellationToken = default)
+    {
+        if (!Alerts.Any(a => a.BudgetId == alert.BudgetId && a.AlertKey == alert.AlertKey))
+        {
+            Alerts.Add(alert);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task ClearForBudgetAsync(Guid budgetId, CancellationToken cancellationToken = default)
+    {
+        Alerts.RemoveAll(a => a.BudgetId == budgetId);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>No-op alert service for the services that trigger alerts as a side effect —
+/// records which projects were poked so tests can assert the hook fired.</summary>
+public sealed class FakeBudgetAlertService : IBudgetAlertService
+{
+    public List<Guid> Evaluated { get; } = [];
+    public List<Guid> Changed { get; } = [];
+
+    public Task EvaluateAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        Evaluated.Add(projectId);
+        return Task.CompletedTask;
+    }
+
+    public Task OnBudgetChangedAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        Changed.Add(projectId);
+        return Task.CompletedTask;
+    }
 }
 
 public sealed class FakeAssignmentRepository : IAssignmentRepository

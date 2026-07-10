@@ -27,7 +27,7 @@ public class TimeEntryServiceTests
     public TimeEntryServiceTests()
     {
         _rateCards = new FakeRateCardRepository(_roles);
-        _service = new TimeEntryService(_currentUser, _projects, _clients, _assignments, _roles, _entries, _rateCards, _periods);
+        _service = new TimeEntryService(_currentUser, _projects, _clients, _assignments, _roles, _entries, _rateCards, _periods, new FakeBudgetAlertService());
 
         _client = new Client { Id = Guid.NewGuid(), Name = "Acme" };
         _clients.Clients.Add(_client);

@@ -8,6 +8,7 @@ using ProjectTango.Application.Preferences;
 using ProjectTango.Application.Projects;
 using ProjectTango.Application.Roles;
 using ProjectTango.Application.TimeEntries;
+using ProjectTango.Infrastructure.Email;
 using ProjectTango.Infrastructure.Persistence;
 using ProjectTango.Infrastructure.Persistence.Repositories;
 
@@ -30,11 +31,13 @@ public static class DependencyInjection
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<IRateCardRepository, RateCardRepository>();
         services.AddScoped<IBudgetRepository, BudgetRepository>();
+        services.AddScoped<IBudgetAlertRepository, BudgetAlertRepository>();
         services.AddScoped<IAssignmentRepository, AssignmentRepository>();
         services.AddScoped<ITimeEntryRepository, TimeEntryRepository>();
         services.AddScoped<ITimesheetPeriodRepository, TimesheetPeriodRepository>();
         services.AddScoped<IEmployeePreferenceRepository, EmployeePreferenceRepository>();
         services.AddScoped<IAuditLog, AuditLogRepository>();
+        services.AddScoped<IEmailSender, LoggingEmailSender>();
 
         return services;
     }

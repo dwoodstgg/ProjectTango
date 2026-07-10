@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<RateCardService>();
         services.AddScoped<AssignmentService>();
         services.AddScoped<BudgetService>();
+        services.AddScoped<IBudgetAlertService, BudgetAlertService>();
         services.AddScoped<ProjectDashboardService>();
         services.AddScoped<TimesheetService>();
         services.AddScoped<TimeEntryService>();

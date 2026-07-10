@@ -36,4 +36,8 @@ public interface IEmployeeRepository
 
     /// <summary>Active employees holding a system-admin role — must never reach zero.</summary>
     Task<int> CountActiveAdminsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Tenant emails of active employees holding the given role (by stable name) —
+    /// used to address notifications, e.g. alerting Operations Managers on budget overrun.</summary>
+    Task<IReadOnlyList<string>> GetActiveEmailsInRoleAsync(string roleName, CancellationToken cancellationToken = default);
 }
