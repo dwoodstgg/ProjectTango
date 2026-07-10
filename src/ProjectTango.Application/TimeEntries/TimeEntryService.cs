@@ -9,9 +9,12 @@ using ProjectTango.Domain.Enums;
 namespace ProjectTango.Application.TimeEntries;
 
 /// <summary>Owner-side time entry: create/edit the single entry for a (project, day) cell
-/// while it is <c>open</c> and its semi-monthly window is open (design rules 1, 5, 6, 7).
-/// No submission step; back-dating within an open window is allowed. hours_worked is set
-/// here and never by an approver; hours_billed tracks worked until approval adjusts it.</summary>
+/// while its semi-monthly window is open (design rules 1, 5, 6, 7). No submission step;
+/// back-dating within an open window is allowed. Entries are <b>auto-approved on save</b>
+/// (the small-shop default) so hours flow straight to billable without a manual gate; a
+/// billable entry with no rate card yet stays <c>open</c> until one is added. The owner keeps
+/// editing an entry until its window closes or it is invoiced. hours_worked is owner-only;
+/// hours_billed tracks worked unless an approver later adjusts it via <see cref="ApprovalService"/>.</summary>
 public class TimeEntryService(
     ICurrentUser currentUser,
     IProjectRepository projects,
@@ -19,6 +22,7 @@ public class TimeEntryService(
     IAssignmentRepository assignments,
     IRoleRepository roles,
     ITimeEntryRepository entries,
+    IRateCardRepository rateCards,
     ITimesheetPeriodRepository periods)
 {
     /// <summary>Records <paramref name="hours"/> for the cell, creating or updating the open
@@ -43,10 +47,10 @@ public class TimeEntryService(
             return null;
         }
 
-        if (existing is { Status: not TimeEntryStatus.Open })
+        if (existing is { Status: TimeEntryStatus.Invoiced })
         {
             throw new DomainException(
-                "This entry is already approved or invoiced — it must be un-approved before it can change.");
+                "This entry is on an invoice — the invoice must be voided before it can change.");
         }
 
         var project = await projects.GetByIdAsync(projectId, cancellationToken)
@@ -82,6 +86,7 @@ public class TimeEntryService(
             existing.BillingRoleId = billingRoleId;
             existing.Notes = notes;
             existing.IsBillable = isBillable;
+            await AutoApproveAsync(existing, cancellationToken);
             await entries.UpdateAsync(existing, cancellationToken);
             return existing;
         }
@@ -99,8 +104,34 @@ public class TimeEntryService(
             IsBillable = isBillable,
             Status = TimeEntryStatus.Open,
         };
+        await AutoApproveAsync(entry, cancellationToken);
         await entries.AddAsync(entry, cancellationToken);
         return entry;
+    }
+
+    /// <summary>Auto-approves the entry on save — the small-shop default that removes the manual
+    /// approval step. Approval is a billing decision, so a billable entry can only auto-approve
+    /// once a rate card covers its (project, billing role, date) (design rule 3); until then it
+    /// stays <c>open</c> and shows up in the approval queue. Non-billable (internal/leave) time
+    /// always auto-approves. The manual path (<see cref="ApprovalService"/>) stays available for
+    /// adjusting hours_billed (worked 8, bill 6) or returning an entry to open.</summary>
+    private async Task AutoApproveAsync(TimeEntry entry, CancellationToken cancellationToken)
+    {
+        if (entry.IsBillable)
+        {
+            var rate = await rateCards.ResolveAsync(entry.ProjectId, entry.BillingRoleId, entry.EntryDate, cancellationToken);
+            if (rate is null)
+            {
+                entry.Status = TimeEntryStatus.Open;
+                entry.ApprovedById = null;
+                entry.ApprovedAt = null;
+                return;
+            }
+        }
+
+        entry.Status = TimeEntryStatus.Approved;
+        entry.ApprovedById = currentUser.EmployeeId;
+        entry.ApprovedAt = DateTimeOffset.UtcNow;
     }
 
     /// <summary>Removes an open entry (clearing a cell). Owner-only edit rules apply.</summary>
@@ -114,9 +145,9 @@ public class TimeEntryService(
 
     private async Task RemoveInternalAsync(TimeEntry entry, CancellationToken cancellationToken)
     {
-        if (entry.Status != TimeEntryStatus.Open)
+        if (entry.Status == TimeEntryStatus.Invoiced)
         {
-            throw new DomainException("Only open entries can be removed — un-approve or void first.");
+            throw new DomainException("This entry is on an invoice — the invoice must be voided before it can be removed.");
         }
 
         await RequireOpenWindowAsync(entry.EntryDate, cancellationToken);

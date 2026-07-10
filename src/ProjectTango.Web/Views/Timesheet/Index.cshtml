@@ -53,8 +53,8 @@
 
 <p class="text-muted small mb-2">
     Enter hours in quarter-hour steps. Each row bills under its project's assigned role. Billable time
-    needs a work description — you'll be prompted for one as you enter hours. Entries save as you go;
-    an approved entry is read-only.
+    needs a work description — you'll be prompted for one as you enter hours. Entries save as you go and
+    stay editable until the timesheet window closes; once invoiced they're locked.
 </p>
 
 <div class="ts-wrap">
@@ -80,8 +80,8 @@
                     {
                         row.Cells.TryGetValue(d.DayNumber, out var cell);
                         var status = cell?.Status ?? "open";
-                        var editable = !d.Locked && status == "open";
-                        <td class="ts-cell @(d.IsWeekend ? "ts-weekend" : "") @(d.Date == today ? "ts-today" : "") @(status == "approved" || status == "invoiced" ? "approved" : "")"
+                        var editable = !d.Locked && status != "invoiced";
+                        <td class="ts-cell @(d.IsWeekend ? "ts-weekend" : "") @(d.Date == today ? "ts-today" : "") @(status == "invoiced" ? "approved" : "")"
                             data-date="@d.Date.ToString("yyyy-MM-dd")">
                             <input type="text" inputmode="decimal" maxlength="5" autocomplete="off"
                                    class="ts-hours"
@@ -343,7 +343,7 @@
         const navRows = Array.from(grid.querySelectorAll('tbody tr'));
         const rowInputs = tr => Array.from(tr.querySelectorAll('.ts-hours'));
 
-        // Move focus from `from` by (dRow, dCol), skipping disabled (locked/approved) cells and
+        // Move focus from `from` by (dRow, dCol), skipping disabled (locked/invoiced) cells and
         // stopping at the grid edges.
         function moveFocus(from, dRow, dCol) {
             const tr = from.closest('tr');
@@ -445,7 +445,7 @@
                     total += h;
                     const notes = cell ? (cell.notes || '') : '';
                     const status = cell ? cell.status : 'open';
-                    const editable = !day.locked && status === 'open';
+                    const editable = !day.locked && status !== 'invoiced';
                     return '<tr data-project="' + p.id + '" data-date="' + day.date + '" data-role="' + (p.roleId || '')
                         + '" data-hours="' + (h > 0 ? show(h, '') : '') + '" data-notes="' + esc(notes)
                         + '" data-label="' + esc(p.label) + '"' + (editable ? '' : ' class="ts-d-locked"') + '>'

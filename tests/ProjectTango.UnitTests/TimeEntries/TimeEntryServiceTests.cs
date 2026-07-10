@@ -14,6 +14,7 @@ public class TimeEntryServiceTests
     private readonly FakeAssignmentRepository _assignments = new();
     private readonly FakeRoleRepository _roles = new();
     private readonly FakeTimeEntryRepository _entries = new();
+    private readonly FakeRateCardRepository _rateCards;
     private readonly FakeTimesheetPeriodRepository _periods = new();
     private readonly TimeEntryService _service;
 
@@ -25,7 +26,8 @@ public class TimeEntryServiceTests
 
     public TimeEntryServiceTests()
     {
-        _service = new TimeEntryService(_currentUser, _projects, _clients, _assignments, _roles, _entries, _periods);
+        _rateCards = new FakeRateCardRepository(_roles);
+        _service = new TimeEntryService(_currentUser, _projects, _clients, _assignments, _roles, _entries, _rateCards, _periods);
 
         _client = new Client { Id = Guid.NewGuid(), Name = "Acme" };
         _clients.Clients.Add(_client);
@@ -52,20 +54,46 @@ public class TimeEntryServiceTests
             EmployeeId = _currentUser.EmployeeId!.Value,
             StartDate = new DateOnly(2026, 1, 1),
         });
+
+        // A rate card covers (project, Developer) so billable entries auto-approve on save.
+        _rateCards.Rates.Add(new ProjectRateCard
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = _project.Id,
+            RoleId = _developer.Id,
+            HourlyRate = 150m,
+            EffectiveFrom = new DateOnly(2026, 1, 1),
+        });
     }
 
     [Fact]
-    public async Task Save_creates_open_entry_with_billed_equal_worked()
+    public async Task Save_auto_approves_a_billable_entry_when_a_rate_card_covers_it()
     {
         var entry = await _service.SaveHoursAsync(_project.Id, Day, 6.5m, _developer.Id, "did work");
 
         Assert.NotNull(entry);
         var stored = Assert.Single(_entries.Entries);
-        Assert.Equal(TimeEntryStatus.Open, stored.Status);
+        Assert.Equal(TimeEntryStatus.Approved, stored.Status);
+        Assert.Equal(_currentUser.EmployeeId, stored.ApprovedById);
+        Assert.NotNull(stored.ApprovedAt);
         Assert.Equal(6.5m, stored.HoursWorked);
         Assert.Equal(6.5m, stored.HoursBilled);
         Assert.True(stored.IsBillable);
         Assert.Equal("did work", stored.Notes);
+    }
+
+    [Fact]
+    public async Task Save_leaves_a_billable_entry_open_when_no_rate_card_covers_it()
+    {
+        _rateCards.Rates.Clear();
+
+        var entry = await _service.SaveHoursAsync(_project.Id, Day, 6.5m, _developer.Id, "did work");
+
+        Assert.NotNull(entry);
+        var stored = Assert.Single(_entries.Entries);
+        Assert.Equal(TimeEntryStatus.Open, stored.Status);
+        Assert.Null(stored.ApprovedById);
+        Assert.Null(stored.ApprovedAt);
     }
 
     [Fact]
@@ -79,7 +107,7 @@ public class TimeEntryServiceTests
     }
 
     [Fact]
-    public async Task Save_updates_the_existing_open_entry_in_place()
+    public async Task Save_updates_the_existing_entry_in_place()
     {
         await _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, "work");
         await _service.SaveHoursAsync(_project.Id, Day, 7.25m, _developer.Id, "more");
@@ -88,6 +116,18 @@ public class TimeEntryServiceTests
         Assert.Equal(7.25m, stored.HoursWorked);
         Assert.Equal(7.25m, stored.HoursBilled);
         Assert.Equal("more", stored.Notes);
+    }
+
+    [Fact]
+    public async Task An_auto_approved_entry_can_still_be_edited_by_the_owner()
+    {
+        await _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, "work");
+        Assert.Equal(TimeEntryStatus.Approved, _entries.Entries.Single().Status);
+
+        var updated = await _service.SaveHoursAsync(_project.Id, Day, 5m, _developer.Id, "revised");
+
+        Assert.NotNull(updated);
+        Assert.Equal(5m, _entries.Entries.Single().HoursWorked);
     }
 
     [Fact]
@@ -164,22 +204,24 @@ public class TimeEntryServiceTests
     public async Task Internal_client_entries_are_non_billable_and_need_no_description()
     {
         _client.IsInternal = true;
+        _rateCards.Rates.Clear(); // non-billable time needs no rate card to auto-approve
 
         var entry = await _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, null);
 
         Assert.NotNull(entry);
         Assert.False(entry!.IsBillable);
         Assert.Null(entry.Notes);
+        Assert.Equal(TimeEntryStatus.Approved, entry.Status);
     }
 
     [Fact]
-    public async Task An_approved_entry_cannot_be_edited_by_the_owner()
+    public async Task An_invoiced_entry_cannot_be_edited_by_the_owner()
     {
         await _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, "work");
-        _entries.Entries.Single().Status = TimeEntryStatus.Approved;
+        _entries.Entries.Single().Status = TimeEntryStatus.Invoiced;
 
         var ex = await Assert.ThrowsAsync<DomainException>(() =>
-            _service.SaveHoursAsync(_project.Id, Day, 5m, _developer.Id, null));
-        Assert.Contains("un-approved", ex.Message);
+            _service.SaveHoursAsync(_project.Id, Day, 5m, _developer.Id, "revised"));
+        Assert.Contains("invoice", ex.Message);
     }
 }
