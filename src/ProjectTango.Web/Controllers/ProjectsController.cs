@@ -13,6 +13,7 @@ public class ProjectsController(
     ProjectAdminService projectAdmin,
     RateCardService rateCardService,
     AssignmentService assignmentService,
+    BudgetService budgetService,
     ProjectDashboardService dashboardService) : Controller
 {
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
@@ -124,6 +125,33 @@ public class ProjectsController(
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetBudget(
+        Guid id, BudgetType type, decimal? amount, decimal? hours, string? thresholds, string? reason,
+        CancellationToken cancellationToken)
+    {
+        return await RunAndReturnToManage(id, () =>
+            budgetService.SetBudgetAsync(id, type, amount, hours, ParseThresholds(thresholds), reason, cancellationToken));
+    }
+
+    /// <summary>Parses the comma/space-separated threshold input (e.g. "50, 75, 90"). Null or
+    /// blank falls through to the service default; the service also validates and clamps.</summary>
+    private static int[]? ParseThresholds(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        return raw
+            .Split([',', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(part => int.TryParse(part, out var value) ? value : (int?)null)
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .ToArray();
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Assign(
         Guid id, Guid employeeId, Guid? defaultBillingRoleId, DateOnly? startDate, CancellationToken cancellationToken)
     {
@@ -171,6 +199,8 @@ public class ProjectsController(
             Form = await WithOptionsAsync(form ?? ProjectFormViewModel.From(project), cancellationToken),
             Rates = await rateCardService.ListForProjectAsync(id, cancellationToken),
             Assignments = await assignmentService.ListForProjectAsync(id, cancellationToken),
+            Budget = await budgetService.GetAsync(id, cancellationToken),
+            BudgetRevisions = await budgetService.GetRevisionsAsync(id, cancellationToken),
             BillableRoleOptions = billableRoles
                 .Select(r => new SelectListItem(r.DisplayName, r.Id.ToString()))
                 .ToList(),

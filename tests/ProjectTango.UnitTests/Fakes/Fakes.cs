@@ -283,6 +283,36 @@ public sealed class FakeRateCardRepository(FakeRoleRepository roles) : IRateCard
             .FirstOrDefault());
 }
 
+public sealed class FakeBudgetRepository : IBudgetRepository
+{
+    public List<Budget> Budgets { get; } = [];
+    public List<BudgetRevision> Revisions { get; } = [];
+
+    /// <summary>Display name returned for every reviser in <see cref="GetRevisionsAsync"/>.</summary>
+    public string RevisedByName { get; set; } = "reviser";
+
+    public Task<Budget?> GetForProjectAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Budgets.FirstOrDefault(b => b.ProjectId == projectId));
+
+    public Task SaveAsync(Budget budget, BudgetRevision revision, CancellationToken cancellationToken = default)
+    {
+        if (Budgets.All(b => b.Id != budget.Id))
+        {
+            Budgets.Add(budget);
+        }
+
+        Revisions.Add(revision);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<BudgetRevisionSummary>> GetRevisionsAsync(Guid budgetId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<BudgetRevisionSummary>>(Revisions
+            .Where(r => r.BudgetId == budgetId)
+            .OrderByDescending(r => r.RevisedAt)
+            .Select(r => new BudgetRevisionSummary(r, RevisedByName))
+            .ToList());
+}
+
 public sealed class FakeAssignmentRepository : IAssignmentRepository
 {
     public List<ProjectAssignment> Assignments { get; } = [];

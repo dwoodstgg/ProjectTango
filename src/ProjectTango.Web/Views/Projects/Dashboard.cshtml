@@ -41,6 +41,80 @@
     </div>
 }
 
+@if (Model.Budget is { } budget)
+{
+    var overClass = budget.IsOverBudget ? "border-danger" : "";
+    string BarClass(bool over, double pct) => over ? "bg-danger" : pct >= 90 ? "bg-warning" : "bg-success";
+
+    <div class="card panel-card mb-4 @overClass">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Budget — @(budget.Type switch {
+                BudgetType.FixedFee => "Fixed fee",
+                BudgetType.TimeAndMaterialsCap => "T&M cap",
+                BudgetType.HoursCap => "Hours cap",
+                _ => budget.Type.ToString() })</span>
+            @if (budget.IsOverBudget)
+            {
+                <span class="badge text-bg-danger">Over budget</span>
+            }
+            else if (budget.HighestThresholdCrossed is int crossed)
+            {
+                <span class="badge text-bg-warning">@crossed% burn reached</span>
+            }
+        </div>
+        <div class="card-body">
+            <div class="row g-4">
+                @if (budget.AmountBudget is not null)
+                {
+                    var pct = budget.PercentValue ?? 0;
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-muted">Dollars — @Money(budget.SpentValue) of @Money(budget.AmountBudget.Value)</span>
+                            <span class="fw-semibold @(budget.IsOverValue ? "text-danger" : "")">@pct.ToString("0")%</span>
+                        </div>
+                        <div class="progress" role="progressbar" style="height: .75rem">
+                            <div class="progress-bar @BarClass(budget.IsOverValue, pct)" style="width: @(Math.Min(100, pct).ToString("0.#", usd))%"></div>
+                        </div>
+                        <div class="small mt-1 @(budget.IsOverValue ? "text-danger" : "text-muted")">
+                            @if (budget.RemainingValue is { } rem)
+                            {
+                                @(rem >= 0 ? $"{Money(rem)} remaining" : $"{Money(-rem)} over")
+                            }
+                            @if (budget.PendingValue > 0)
+                            {
+                                <span>· @Money(budget.PendingValue) pending (open)</span>
+                            }
+                        </div>
+                    </div>
+                }
+                @if (budget.HoursBudget is not null)
+                {
+                    var pct = budget.PercentHours ?? 0;
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-muted">Hours — @Hrs(budget.SpentHours) of @Hrs(budget.HoursBudget.Value)</span>
+                            <span class="fw-semibold @(budget.IsOverHours ? "text-danger" : "")">@pct.ToString("0")%</span>
+                        </div>
+                        <div class="progress" role="progressbar" style="height: .75rem">
+                            <div class="progress-bar @BarClass(budget.IsOverHours, pct)" style="width: @(Math.Min(100, pct).ToString("0.#", usd))%"></div>
+                        </div>
+                        <div class="small mt-1 @(budget.IsOverHours ? "text-danger" : "text-muted")">
+                            @if (budget.RemainingHours is { } rem)
+                            {
+                                @(rem >= 0 ? $"{Hrs(rem)} hrs remaining" : $"{Hrs(-rem)} hrs over")
+                            }
+                            @if (budget.PendingHours > 0)
+                            {
+                                <span>· @Hrs(budget.PendingHours) hrs pending (open)</span>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
 <div class="row g-3 mb-4">
     <div class="col-6 col-lg-3">
         <div class="card panel-card h-100"><div class="card-body">

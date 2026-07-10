@@ -54,7 +54,7 @@
 
 <div class="row g-4">
     <div class="col-lg-5">
-        <div class="card panel-card h-100">
+        <div class="card panel-card mb-4">
             <div class="card-header">Details</div>
             <div class="card-body">
                 <form asp-action="Edit" asp-route-id="@project.Id">
@@ -66,6 +66,8 @@
                 </form>
             </div>
         </div>
+
+        <partial name="_BudgetCard" model="Model" />
     </div>
 
     <div class="col-lg-7">

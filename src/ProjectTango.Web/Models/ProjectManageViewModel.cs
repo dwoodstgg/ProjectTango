@@ -10,6 +10,8 @@ public class ProjectManageViewModel
     public required ProjectFormViewModel Form { get; init; }
     public required IReadOnlyList<RateCardSummary> Rates { get; init; }
     public required IReadOnlyList<AssignmentSummary> Assignments { get; init; }
+    public Budget? Budget { get; init; }
+    public IReadOnlyList<BudgetRevisionSummary> BudgetRevisions { get; init; } = [];
     public List<SelectListItem> BillableRoleOptions { get; init; } = [];
     public List<SelectListItem> EmployeeOptions { get; init; } = [];
 }

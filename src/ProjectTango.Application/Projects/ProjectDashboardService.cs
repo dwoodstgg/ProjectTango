@@ -29,6 +29,39 @@ public record RecentEntry(
     DateOnly Date, string EmployeeName, string RoleName,
     decimal HoursWorked, decimal HoursBilled, TimeEntryStatus Status, bool IsBillable);
 
+/// <summary>Budget vs. burn for the dashboard (design §6.2). "Spent" is realized/realizable
+/// value — approved (WIP) plus invoiced; "pending" is open work not yet approved. Hours mirror
+/// that split (billed hours once approved, worked hours while open). Overrun is only flagged,
+/// never blocking (design rule 9).</summary>
+public record BudgetStatus(
+    BudgetType Type,
+    decimal? AmountBudget,
+    decimal? HoursBudget,
+    IReadOnlyList<int> AlertThresholds,
+    decimal SpentValue,
+    decimal PendingValue,
+    decimal SpentHours,
+    decimal PendingHours)
+{
+    public decimal? RemainingValue => AmountBudget is null ? null : AmountBudget.Value - SpentValue;
+    public decimal? RemainingHours => HoursBudget is null ? null : HoursBudget.Value - SpentHours;
+
+    /// <summary>Percent of the dollar budget spent, or null when there is no positive dollar
+    /// budget to measure against. Can exceed 100 on overrun.</summary>
+    public double? PercentValue => AmountBudget is > 0 ? (double)(SpentValue / AmountBudget.Value) * 100 : null;
+    public double? PercentHours => HoursBudget is > 0 ? (double)(SpentHours / HoursBudget.Value) * 100 : null;
+
+    public bool IsOverValue => RemainingValue is < 0;
+    public bool IsOverHours => RemainingHours is < 0;
+    public bool IsOverBudget => IsOverValue || IsOverHours;
+
+    /// <summary>The higher of the two dimensions' burn — what alert thresholds are measured against.</summary>
+    public double BurnPercent => Math.Max(PercentValue ?? 0, PercentHours ?? 0);
+
+    public IReadOnlyList<int> ThresholdsCrossed => AlertThresholds.Where(t => BurnPercent >= t).ToList();
+    public int? HighestThresholdCrossed => ThresholdsCrossed.Count > 0 ? ThresholdsCrossed[^1] : null;
+}
+
 public class ProjectDashboard
 {
     public required Project Project { get; init; }
@@ -40,21 +73,25 @@ public class ProjectDashboard
     public required IReadOnlyList<AssignmentSummary> Team { get; init; }
     public required IReadOnlyList<RecentEntry> Recent { get; init; }
 
+    /// <summary>The project's budget vs. burn, or null when no budget has been set.</summary>
+    public BudgetStatus? Budget { get; init; }
+
     /// <summary>True when some billable entries have no rate card for their date, so the
     /// dollar figures understate the real value until a rate is added (design rule 3).</summary>
     public bool HasRateGaps { get; init; }
 }
 
-/// <summary>Read-only project burn dashboard (design §6.2). Budgets and projections arrive
-/// in Phase 2; for now it reports hours and dollar value from time entries and rate cards,
-/// split by status/role/person. Value bases: open entries on hours_worked (pending), and
-/// approved/invoiced on hours_billed (the billing decision).</summary>
+/// <summary>Read-only project burn dashboard (design §6.2). Reports hours and dollar value from
+/// time entries and rate cards, split by status/role/person, and — when a budget is set — burn
+/// against it (spent, remaining, % of threshold, overrun). Value bases: open entries on
+/// hours_worked (pending), and approved/invoiced on hours_billed (the billing decision).</summary>
 public class ProjectDashboardService(
     ICurrentUser currentUser,
     IProjectRepository projects,
     IClientRepository clients,
     IAssignmentRepository assignments,
-    ITimeEntryRepository entries)
+    ITimeEntryRepository entries,
+    IBudgetRepository budgets)
 {
     public async Task<ProjectDashboard?> GetAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
@@ -98,6 +135,18 @@ public class ProjectDashboardService(
             .Select(r => new RecentEntry(r.EntryDate, r.EmployeeName, r.RoleName, r.HoursWorked, r.HoursBilled, r.Status, r.IsBillable))
             .ToList();
 
+        var budget = await budgets.GetForProjectAsync(projectId, cancellationToken);
+        var budgetStatus = budget is null ? null : new BudgetStatus(
+            Type: budget.Type,
+            AmountBudget: budget.Amount,
+            HoursBudget: budget.Hours,
+            AlertThresholds: budget.AlertThresholds,
+            SpentValue: totals.BillableValue,
+            PendingValue: totals.PendingValue,
+            // Hours mirror the value split: billed hours once approved/invoiced, worked while open.
+            SpentHours: rows.Where(r => r.Status != TimeEntryStatus.Open).Sum(r => r.HoursBilled),
+            PendingHours: rows.Where(r => r.Status == TimeEntryStatus.Open).Sum(r => r.HoursWorked));
+
         return new ProjectDashboard
         {
             Project = project,
@@ -108,6 +157,7 @@ public class ProjectDashboardService(
             ByPerson = byPerson,
             Team = team,
             Recent = recent,
+            Budget = budgetStatus,
             HasRateGaps = rows.Any(r => r is { IsBillable: true, ResolvedRate: null }),
         };
     }

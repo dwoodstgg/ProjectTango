@@ -1,0 +1,131 @@
+@using System.Globalization
+@using ProjectTango.Domain.Enums
+@model ProjectManageViewModel
+@{
+    var usd = CultureInfo.GetCultureInfo("en-US");
+    string Money(decimal v) => v.ToString("C0", usd);
+    string Hrs(decimal h) => h.ToString("0.##");
+
+    static string TypeLabel(BudgetType t) => t switch
+    {
+        BudgetType.FixedFee => "Fixed fee",
+        BudgetType.TimeAndMaterialsCap => "T&M cap",
+        BudgetType.HoursCap => "Hours cap",
+        _ => t.ToString(),
+    };
+
+    var b = Model.Budget;
+    var thresholdText = b is null ? "50, 75, 90" : string.Join(", ", b.AlertThresholds);
+}
+
+<div class="card panel-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Budget</span>
+        @if (b is not null)
+        {
+            <span class="badge text-bg-secondary">@TypeLabel(b.Type)</span>
+        }
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">
+            A budget flags overrun on the <a asp-action="Dashboard" asp-route-id="@Model.Project.Id">dashboard</a> —
+            it never blocks time entry or closes the project. Every change is kept as a revision.
+        </p>
+
+        @if (b is not null)
+        {
+            <dl class="row mb-3 small">
+                @if (b.Amount is not null)
+                {
+                    <dt class="col-5 text-muted fw-normal">Dollar budget</dt>
+                    <dd class="col-7 text-end fw-semibold">@Money(b.Amount.Value)</dd>
+                }
+                @if (b.Hours is not null)
+                {
+                    <dt class="col-5 text-muted fw-normal">Hours budget</dt>
+                    <dd class="col-7 text-end fw-semibold">@Hrs(b.Hours.Value) hrs</dd>
+                }
+                <dt class="col-5 text-muted fw-normal">Alert at</dt>
+                <dd class="col-7 text-end">@string.Join("%, ", b.AlertThresholds)%</dd>
+            </dl>
+        }
+        else
+        {
+            <p class="text-muted small fst-italic mb-3">No budget set — the dashboard shows burn with nothing to measure against.</p>
+        }
+
+        <div class="inline-add">
+            <div class="inline-add-title">@(b is null ? "Set budget" : "Revise budget")</div>
+            <form asp-action="SetBudget" asp-route-id="@Model.Project.Id" method="post">
+                <div class="row g-2">
+                    <div class="col-12">
+                        <label class="form-label small mb-1">Type</label>
+                        <select name="type" class="form-select form-select-sm">
+                            @foreach (var t in new[] { BudgetType.FixedFee, BudgetType.TimeAndMaterialsCap, BudgetType.HoursCap })
+                            {
+                                <option value="@t" selected="@(b?.Type == t)">@TypeLabel(t)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small mb-1">Dollar amount</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">$</span>
+                            <input name="amount" type="number" step="0.01" min="0" class="form-control"
+                                   value="@(b?.Amount?.ToString("0.##"))" placeholder="—" />
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small mb-1">Hours cap</label>
+                        <input name="hours" type="number" step="0.25" min="0" class="form-control form-control-sm"
+                               value="@(b?.Hours?.ToString("0.##"))" placeholder="—" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small mb-1">Alert thresholds (% burn)</label>
+                        <input name="thresholds" type="text" class="form-control form-control-sm" value="@thresholdText" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small mb-1">Reason <span class="text-muted">(optional)</span></label>
+                        <input name="reason" type="text" class="form-control form-control-sm" placeholder="e.g. SOW signed, change order #2" />
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-sm btn-primary">@(b is null ? "Set budget" : "Save revision")</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        @if (Model.BudgetRevisions.Count > 0)
+        {
+            <div class="mt-3">
+                <div class="text-muted small text-uppercase mb-1">History</div>
+                <ul class="list-unstyled small mb-0">
+                    @foreach (var rev in Model.BudgetRevisions)
+                    {
+                        var r = rev.Revision;
+                        <li class="border-top py-2">
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-semibold">
+                                    @(r.ToAmount is not null ? Money(r.ToAmount.Value) : "—")@(r.ToHours is not null ? $" · {Hrs(r.ToHours.Value)} hrs" : "")
+                                </span>
+                                <span class="text-muted">@r.RevisedAt.ToLocalTime().ToString("MMM d, yyyy")</span>
+                            </div>
+                            <div class="text-muted">
+                                @TypeLabel(r.ToType)
+                                @if (r.FromAmount is not null && r.FromAmount != r.ToAmount)
+                                {
+                                    <span>· was @Money(r.FromAmount.Value)</span>
+                                }
+                                · @rev.RevisedByName
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(r.Reason))
+                            {
+                                <div class="fst-italic">“@r.Reason”</div>
+                            }
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+    </div>
+</div>
