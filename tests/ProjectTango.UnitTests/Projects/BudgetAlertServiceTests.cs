@@ -132,6 +132,49 @@ public class BudgetAlertServiceTests
     }
 
     [Fact]
+    public async Task A_role_allocation_alerts_when_that_role_passes_a_threshold()
+    {
+        _budget.RoleAllocations =
+        [
+            new BudgetRoleAllocation
+            {
+                Id = Guid.NewGuid(), BudgetId = _budget.Id, RoleId = _devRole, Hours = 10m, RoleName = "Lead Developer",
+            },
+        ];
+        AddApproved(6m); // 6 of 10 role-hours = 60% for the role
+
+        await _service.EvaluateAsync(_project.Id);
+
+        Assert.Contains(_email.Sent, m => m.Subject.Contains("Lead Developer") && m.Subject.Contains("50%"));
+        Assert.Contains(_alerts.Alerts, a => a.AlertKey == $"role:{_devRole}:pct:50");
+
+        // Deduped on a second pass with no change.
+        var before = _email.Sent.Count;
+        await _service.EvaluateAsync(_project.Id);
+        Assert.Equal(before, _email.Sent.Count);
+    }
+
+    [Fact]
+    public async Task A_role_over_its_hours_allocation_alerts_ops()
+    {
+        AddOps("ops@geo.test");
+        _budget.RoleAllocations =
+        [
+            new BudgetRoleAllocation
+            {
+                Id = Guid.NewGuid(), BudgetId = _budget.Id, RoleId = _devRole, Hours = 5m, RoleName = "Lead Developer",
+            },
+        ];
+        AddApproved(7m); // 7 of 5 role-hours → over
+
+        await _service.EvaluateAsync(_project.Id);
+
+        var overrun = Assert.Single(_email.Sent, m => m.Subject.Contains("Lead Developer") && m.Subject.Contains("over its hours budget"));
+        Assert.Contains("ops@geo.test", overrun.To);
+        Assert.Contains(_alerts.Alerts, a => a.AlertKey == $"role:{_devRole}:overrun");
+    }
+
+    [Fact]
     public async Task No_budget_sends_nothing()
     {
         _budgets.Budgets.Clear();

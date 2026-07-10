@@ -21,6 +21,11 @@ public class Budget
     /// <summary>Percent-of-burn points that notify the PM, e.g. {50, 75, 90}.</summary>
     public int[] AlertThresholds { get; set; } = [50, 75, 90];
 
+    /// <summary>Optional per-role hour allocations (e.g. Lead Developer 300h, PM 10h). When
+    /// present and no overall <see cref="Hours"/> is set explicitly, the overall hours budget
+    /// defaults to their sum.</summary>
+    public List<BudgetRoleAllocation> RoleAllocations { get; set; } = [];
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

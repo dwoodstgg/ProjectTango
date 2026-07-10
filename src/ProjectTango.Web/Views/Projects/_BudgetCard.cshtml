@@ -16,6 +16,7 @@
 
     var b = Model.Budget;
     var thresholdText = b is null ? "50, 75, 90" : string.Join(", ", b.AlertThresholds);
+    var allocByRole = b?.RoleAllocations.ToDictionary(a => a.RoleId, a => a.Hours) ?? new Dictionary<Guid, decimal>();
 }
 
 <div class="card panel-card">
@@ -48,6 +49,20 @@
                 <dt class="col-5 text-muted fw-normal">Alert at</dt>
                 <dd class="col-7 text-end">@string.Join("%, ", b.AlertThresholds)%</dd>
             </dl>
+
+            @if (b.RoleAllocations.Count > 0)
+            {
+                <div class="text-muted small text-uppercase mb-1">Hours by role</div>
+                <ul class="list-unstyled small mb-3">
+                    @foreach (var a in b.RoleAllocations.OrderBy(a => a.RoleName))
+                    {
+                        <li class="d-flex justify-content-between border-top py-1">
+                            <span>@a.RoleName</span>
+                            <span class="fw-semibold">@Hrs(a.Hours) hrs</span>
+                        </li>
+                    }
+                </ul>
+            }
         }
         else
         {
@@ -84,6 +99,26 @@
                         <label class="form-label small mb-1">Alert thresholds (% burn)</label>
                         <input name="thresholds" type="text" class="form-control form-control-sm" value="@thresholdText" />
                     </div>
+                    @if (Model.BillableRoleOptions.Count > 0)
+                    {
+                        <div class="col-12">
+                            <label class="form-label small mb-1">Hours by role <span class="text-muted">(optional)</span></label>
+                            <div class="text-muted small mb-2">Budget hours per billing role, e.g. Lead Developer 300, PM 10. Leave blank for roles you aren't capping. Overall hours default to the sum.</div>
+                            <div class="row g-2">
+                                @foreach (var option in Model.BillableRoleOptions)
+                                {
+                                    var value = Guid.TryParse(option.Value, out var rid) && allocByRole.TryGetValue(rid, out var h)
+                                        ? h.ToString("0.##")
+                                        : "";
+                                    <div class="col-6 d-flex align-items-center gap-2">
+                                        <label class="form-label small mb-0 flex-grow-1 text-truncate" for="roleHours-@option.Value">@option.Text</label>
+                                        <input id="roleHours-@option.Value" name="roleHours[@option.Value]" type="number" step="0.25" min="0"
+                                               value="@value" placeholder="—" class="form-control form-control-sm" style="width: 6rem" />
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
                     <div class="col-12">
                         <label class="form-label small mb-1">Reason <span class="text-muted">(optional)</span></label>
                         <input name="reason" type="text" class="form-control form-control-sm" placeholder="e.g. SOW signed, change order #2" />

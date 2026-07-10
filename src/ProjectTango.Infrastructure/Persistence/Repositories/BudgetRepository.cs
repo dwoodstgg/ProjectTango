@@ -19,7 +19,31 @@ public class BudgetRepository(NpgsqlDataSource dataSource) : IBudgetRepository
             """,
             new { projectId },
             cancellationToken: cancellationToken));
-        return row is null ? null : ToEntity(row);
+        if (row is null)
+        {
+            return null;
+        }
+
+        var budget = ToEntity(row);
+        var allocations = await connection.QueryAsync<AllocationRow>(new CommandDefinition(
+            """
+            SELECT a.id, a.budget_id, a.role_id, a.hours, r.display_name AS role_name
+            FROM budget_role_allocations a
+            JOIN roles r ON r.id = a.role_id
+            WHERE a.budget_id = @budgetId
+            ORDER BY r.display_name
+            """,
+            new { budgetId = budget.Id },
+            cancellationToken: cancellationToken));
+        budget.RoleAllocations = allocations.Select(a => new BudgetRoleAllocation
+        {
+            Id = a.Id,
+            BudgetId = a.BudgetId,
+            RoleId = a.RoleId,
+            Hours = a.Hours,
+            RoleName = a.RoleName,
+        }).ToList();
+        return budget;
     }
 
     public async Task SaveAsync(Budget budget, BudgetRevision revision, CancellationToken cancellationToken = default)
@@ -75,6 +99,23 @@ public class BudgetRepository(NpgsqlDataSource dataSource) : IBudgetRepository
                 revision.Reason,
             },
             transaction, cancellationToken: cancellationToken));
+
+        // Replace the role allocations wholesale — the entity carries the desired set.
+        await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM budget_role_allocations WHERE budget_id = @Id",
+            new { budget.Id },
+            transaction, cancellationToken: cancellationToken));
+
+        foreach (var allocation in budget.RoleAllocations)
+        {
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
+                INSERT INTO budget_role_allocations (id, budget_id, role_id, hours)
+                VALUES (@Id, @BudgetId, @RoleId, @Hours)
+                """,
+                new { allocation.Id, BudgetId = budget.Id, allocation.RoleId, allocation.Hours },
+                transaction, cancellationToken: cancellationToken));
+        }
 
         await transaction.CommitAsync(cancellationToken);
     }
@@ -136,6 +177,15 @@ public class BudgetRepository(NpgsqlDataSource dataSource) : IBudgetRepository
         public int[]? AlertThresholds { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
+    }
+
+    private sealed class AllocationRow
+    {
+        public Guid Id { get; set; }
+        public Guid BudgetId { get; set; }
+        public Guid RoleId { get; set; }
+        public decimal Hours { get; set; }
+        public string? RoleName { get; set; }
     }
 
     private sealed class BudgetRevisionRow

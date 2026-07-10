@@ -69,20 +69,40 @@ public class BudgetAlertService(
         var status = BudgetBurn.Compute(budget, rows);
 
         var fired = await alerts.GetFiredKeysAsync(budget.Id, cancellationToken);
-        var pending = new List<(string Key, int? Threshold, bool NotifyOps)>();
+        var pending = new List<AlertIntent>();
 
+        // Overall project burn (dollars and/or hours).
         foreach (var threshold in budget.AlertThresholds.OrderBy(t => t))
         {
             var key = $"pct:{threshold}";
             if (status.BurnPercent >= threshold && !fired.Contains(key))
             {
-                pending.Add((key, threshold, threshold >= OpsThreshold));
+                pending.Add(new AlertIntent(key, threshold >= OpsThreshold, threshold, (decimal)status.BurnPercent, Role: null));
             }
         }
 
         if (status.IsOverBudget && !fired.Contains("overrun"))
         {
-            pending.Add(("overrun", null, true));
+            pending.Add(new AlertIntent("overrun", NotifyOps: true, Threshold: null, (decimal)status.BurnPercent, Role: null));
+        }
+
+        // Per-role hours burn (e.g. Lead Developer past 90% of its 300h).
+        foreach (var role in status.Roles.Where(r => r.AllocatedHours > 0))
+        {
+            foreach (var threshold in budget.AlertThresholds.OrderBy(t => t))
+            {
+                var key = $"role:{role.RoleId}:pct:{threshold}";
+                if (role.PercentHours >= threshold && !fired.Contains(key))
+                {
+                    pending.Add(new AlertIntent(key, threshold >= OpsThreshold, threshold, (decimal)role.PercentHours, role));
+                }
+            }
+
+            var overrunKey = $"role:{role.RoleId}:overrun";
+            if (role.IsOver && !fired.Contains(overrunKey))
+            {
+                pending.Add(new AlertIntent(overrunKey, NotifyOps: true, Threshold: null, (decimal)role.PercentHours, role));
+            }
         }
 
         if (pending.Count == 0)
@@ -96,9 +116,9 @@ public class BudgetAlertService(
             return;
         }
 
-        foreach (var (key, threshold, notifyOps) in pending)
+        foreach (var intent in pending)
         {
-            var recipients = await ResolveRecipientsAsync(project, notifyOps, cancellationToken);
+            var recipients = await ResolveRecipientsAsync(project, intent.NotifyOps, cancellationToken);
             if (recipients.Count == 0)
             {
                 // No one to notify yet (e.g. PM has no email). Leave it un-recorded so it can
@@ -106,17 +126,25 @@ public class BudgetAlertService(
                 continue;
             }
 
-            await email.SendAsync(BuildMessage(project, status, key, threshold, recipients), cancellationToken);
+            var message = intent.Role is null
+                ? BuildOverallMessage(project, status, intent, recipients)
+                : BuildRoleMessage(project, intent, recipients);
+            await email.SendAsync(message, cancellationToken);
+
             await alerts.RecordAsync(new BudgetAlert
             {
                 Id = Guid.NewGuid(),
                 BudgetId = budget.Id,
-                AlertKey = key,
-                BurnPercent = (decimal)status.BurnPercent,
+                AlertKey = intent.Key,
+                BurnPercent = intent.BurnPercent,
                 NotifiedAt = DateTimeOffset.UtcNow,
             }, cancellationToken);
         }
     }
+
+    /// <summary>One alert about to fire: its dedupe key, whether Ops is looped in, the threshold
+    /// (null for overrun), the burn percent, and the role it concerns (null for project-overall).</summary>
+    private sealed record AlertIntent(string Key, bool NotifyOps, int? Threshold, decimal BurnPercent, RoleBudget? Role);
 
     private async Task<IReadOnlyList<string>> ResolveRecipientsAsync(
         Project project, bool notifyOps, CancellationToken cancellationToken)
@@ -140,12 +168,12 @@ public class BudgetAlertService(
         return recipients.ToList();
     }
 
-    private static EmailMessage BuildMessage(
-        Project project, BudgetStatus status, string key, int? threshold, IReadOnlyList<string> recipients)
+    private static EmailMessage BuildOverallMessage(
+        Project project, BudgetStatus status, AlertIntent intent, IReadOnlyList<string> recipients)
     {
-        var headline = key == "overrun"
+        var headline = intent.Key == "overrun"
             ? $"over budget ({status.BurnPercent.ToString("0", Usd)}% burned)"
-            : $"at {threshold}% of budget ({status.BurnPercent.ToString("0", Usd)}% burned)";
+            : $"at {intent.Threshold}% of budget ({status.BurnPercent.ToString("0", Usd)}% burned)";
 
         var subject = $"[Budget] {project.Code} {headline}";
 
@@ -170,6 +198,33 @@ public class BudgetAlertService(
         if (status.PendingValue > 0)
         {
             lines.Add($"Plus {status.PendingValue.ToString("C0", Usd)} pending (open, not yet approved).");
+        }
+
+        return new EmailMessage(recipients, subject, string.Join("\n", lines));
+    }
+
+    private static EmailMessage BuildRoleMessage(
+        Project project, AlertIntent intent, IReadOnlyList<string> recipients)
+    {
+        var role = intent.Role!;
+        var headline = intent.Key.EndsWith(":overrun")
+            ? $"over its hours budget ({role.PercentHours.ToString("0", Usd)}%)"
+            : $"at {intent.Threshold}% of its hours budget";
+
+        var subject = $"[Budget] {project.Code} — {role.RoleName} {headline}";
+
+        var remaining = role.RemainingHours;
+        var lines = new List<string>
+        {
+            $"{project.Code} — {project.Name}: the {role.RoleName} role is {headline}.",
+            "",
+            $"Hours: {role.SpentHours:0.##} of {role.AllocatedHours:0.##} spent "
+                + (remaining >= 0 ? $"({remaining:0.##} remaining)" : $"({-remaining:0.##} over)"),
+        };
+
+        if (role.PendingHours > 0)
+        {
+            lines.Add($"Plus {role.PendingHours:0.##} hrs pending (open, not yet approved).");
         }
 
         return new EmailMessage(recipients, subject, string.Join("\n", lines));

@@ -111,6 +111,34 @@
                     </div>
                 }
             </div>
+
+            @if (budget.Roles.Count > 0)
+            {
+                <hr class="my-3" />
+                <div class="text-muted small text-uppercase mb-2">Hours by role</div>
+                <div class="row g-3">
+                    @foreach (var role in budget.Roles)
+                    {
+                        var pct = role.PercentHours;
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span class="text-muted">@role.RoleName — @Hrs(role.SpentHours) of @Hrs(role.AllocatedHours) hrs</span>
+                                <span class="fw-semibold @(role.IsOver ? "text-danger" : "")">@pct.ToString("0")%</span>
+                            </div>
+                            <div class="progress" role="progressbar" style="height: .6rem">
+                                <div class="progress-bar @BarClass(role.IsOver, pct)" style="width: @(Math.Min(100, pct).ToString("0.#", usd))%"></div>
+                            </div>
+                            <div class="small mt-1 @(role.IsOver ? "text-danger" : "text-muted")">
+                                @(role.RemainingHours >= 0 ? $"{Hrs(role.RemainingHours)} hrs remaining" : $"{Hrs(-role.RemainingHours)} hrs over")
+                                @if (role.PendingHours > 0)
+                                {
+                                    <span>· @Hrs(role.PendingHours) hrs pending (open)</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
         </div>
     </div>
 }

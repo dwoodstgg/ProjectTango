@@ -255,6 +255,17 @@ Employee *──* Role   (via employee_roles — company roles, permissions)
 | hours | numeric(9,2) null | Hours budget (either/both allowed) |
 | alert_thresholds | int[] | e.g., {50, 75, 90} → notify PM at % burn |
 
+> A budget may also carry **per-role hour allocations** (`budget_role_allocations`: budget + billing role + hours, e.g. Lead Developer 300h, PM 10h). Allocations are in hours; dollar value derives from the rate card. They coexist with the overall budget — a fixed-dollar project can still allocate and track hours per role. When the overall `hours` is not set explicitly, it defaults to the sum of the allocations. Burn and threshold alerts apply at **both levels**: overall project burn and each role's hours vs. its allocation.
+
+**budget_role_allocations** — per-role hour budgets under a project budget
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| budget_id | uuid FK → budgets | ON DELETE CASCADE |
+| role_id | uuid FK → roles | Billable role only |
+| hours | numeric(9,2) | Allocated hours for this role |
+| unique (budget_id, role_id) | | One allocation per role |
+
 **budget_revisions** — audit trail of every budget change (who, when, old → new, reason).
 
 **milestones** — fixed-fee billing checkpoints, defined per project
@@ -487,6 +498,8 @@ Mobile app (.NET MAUI or React Native — time entry + approvals on the go), des
 16. **Workbook sheet roles** ✅ Per month: hours are entered on the calendar sheet; the `-DESC` sheet receives rolled-up hours and holds the typed work descriptions. Import takes hours from the calendar, descriptions from `-DESC`; extra client-specific calendars are skipped.
 17. **Data access** ✅ **Dapper + Npgsql, no ORM** (revised from EF Core). Schema lives in numbered plain-SQL scripts run by DbUp; enums stored as text with CHECK constraints; snake_case naming per §5.
 18. **Billing contact & terms location** ✅ (revised 2026-07-08) Per **project**, not client. Billing contact, address, and payment terms live on the project (all nullable); the client keeps the same fields as **defaults**. Effective value resolves field-by-field project → client → default (terms default 30). Motivated by one client having several concurrent projects with different departmental contacts.
+20. **Per-role hour budgets** ✅ (2026-07-10) A project budget can carry **per-role hour allocations** (e.g. Lead Developer 300h, PM 10h) alongside the overall dollar/hours budget — the two levels are independent, so a fixed-dollar project can still allocate and track hours by role. Allocations are in hours (dollars derive from the rate card); overall hours default to the sum of allocations when not set explicitly. Burn tracking and threshold email alerts apply at **both** levels (overall project and each role vs. its allocation).
+
 19. **Approval step** ✅ (2026-07-09) **Auto-approve on save.** We're a small shop — a manual approval gate is more overhead than it's worth, so entries approve automatically when saved: billable entries approve once a rate card covers them (otherwise they stay `open` until one is added), non-billable time always approves. The `approved` status and the full approval machinery (ApprovalService, un-approve, `hours_billed` adjustment, the approvals screen) are **retained**, so a manual review step can be turned back on later without rework. Consequence: the "worked 8, bill 6" adjustment is now an explicit Ops/PM un-approve + re-approve rather than a step every entry passes through.
 
 ### Still open

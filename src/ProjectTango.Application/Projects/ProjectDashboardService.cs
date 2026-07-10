@@ -29,10 +29,20 @@ public record RecentEntry(
     DateOnly Date, string EmployeeName, string RoleName,
     decimal HoursWorked, decimal HoursBilled, TimeEntryStatus Status, bool IsBillable);
 
+/// <summary>Hours budget vs. burn for one billing role (e.g. Lead Developer 300h). "Spent" is
+/// billed hours on approved/invoiced entries; "pending" is worked hours still open.</summary>
+public record RoleBudget(
+    Guid RoleId, string RoleName, decimal AllocatedHours, decimal SpentHours, decimal PendingHours)
+{
+    public decimal RemainingHours => AllocatedHours - SpentHours;
+    public double PercentHours => AllocatedHours > 0 ? (double)(SpentHours / AllocatedHours) * 100 : 0;
+    public bool IsOver => SpentHours > AllocatedHours;
+}
+
 /// <summary>Budget vs. burn for the dashboard (design §6.2). "Spent" is realized/realizable
 /// value — approved (WIP) plus invoiced; "pending" is open work not yet approved. Hours mirror
 /// that split (billed hours once approved, worked hours while open). Overrun is only flagged,
-/// never blocking (design rule 9).</summary>
+/// never blocking (design rule 9). <see cref="Roles"/> carries the per-role hour budgets.</summary>
 public record BudgetStatus(
     BudgetType Type,
     decimal? AmountBudget,
@@ -41,7 +51,8 @@ public record BudgetStatus(
     decimal SpentValue,
     decimal PendingValue,
     decimal SpentHours,
-    decimal PendingHours)
+    decimal PendingHours,
+    IReadOnlyList<RoleBudget> Roles)
 {
     public decimal? RemainingValue => AmountBudget is null ? null : AmountBudget.Value - SpentValue;
     public decimal? RemainingHours => HoursBudget is null ? null : HoursBudget.Value - SpentHours;

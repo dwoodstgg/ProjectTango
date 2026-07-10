@@ -11,14 +11,18 @@ public class BudgetServiceTests
     private readonly FakeCurrentUser _currentUser = new();
     private readonly FakeProjectRepository _projects = new();
     private readonly FakeBudgetRepository _budgets = new();
+    private readonly FakeRoleRepository _roles = new();
     private readonly FakeAuditLog _audit = new();
     private readonly BudgetService _service;
 
     private readonly Project _project;
+    private readonly Role _leadRole = new() { Id = Guid.NewGuid(), Name = "Lead Developer", DisplayName = "Lead Developer" };
+    private readonly Role _adminRole = new() { Id = Guid.NewGuid(), Name = RoleNames.Admin, IsBillable = false, IsSystemAdmin = true };
 
     public BudgetServiceTests()
     {
-        _service = new BudgetService(_currentUser, _projects, _budgets, _audit, new FakeBudgetAlertService());
+        _service = new BudgetService(_currentUser, _projects, _budgets, _roles, _audit, new FakeBudgetAlertService());
+        _roles.Roles.AddRange([_leadRole, _adminRole]);
         _project = new Project
         {
             Id = Guid.NewGuid(),
@@ -75,6 +79,62 @@ public class BudgetServiceTests
 
         var budget = Assert.Single(_budgets.Budgets);
         Assert.Equal([50, 75, 90], budget.AlertThresholds);   // 150 and 0 dropped, 50 deduped, sorted
+    }
+
+    [Fact]
+    public async Task Role_hours_persist_and_overall_hours_defaults_to_their_sum()
+    {
+        await _service.SetBudgetAsync(
+            _project.Id, BudgetType.HoursCap, amount: null, hours: null, alertThresholds: null, reason: null,
+            roleAllocations: [new RoleHourInput(_leadRole.Id, 300m)]);
+
+        var budget = Assert.Single(_budgets.Budgets);
+        var allocation = Assert.Single(budget.RoleAllocations);
+        Assert.Equal(_leadRole.Id, allocation.RoleId);
+        Assert.Equal(300m, allocation.Hours);
+        Assert.Equal(300m, budget.Hours);   // overall hours default to the sum of allocations
+    }
+
+    [Fact]
+    public async Task Explicit_overall_hours_win_over_the_allocation_sum()
+    {
+        await _service.SetBudgetAsync(
+            _project.Id, BudgetType.HoursCap, amount: null, hours: 500m, alertThresholds: null, reason: null,
+            roleAllocations: [new RoleHourInput(_leadRole.Id, 300m)]);
+
+        Assert.Equal(500m, Assert.Single(_budgets.Budgets).Hours);
+    }
+
+    [Fact]
+    public async Task Fixed_dollar_project_can_still_carry_role_hours()
+    {
+        await _service.SetBudgetAsync(
+            _project.Id, BudgetType.FixedFee, amount: 50000m, hours: null, alertThresholds: null, reason: null,
+            roleAllocations: [new RoleHourInput(_leadRole.Id, 300m)]);
+
+        var budget = Assert.Single(_budgets.Budgets);
+        Assert.Equal(50000m, budget.Amount);
+        Assert.Equal(300m, budget.Hours);   // hours tracked alongside the fixed fee
+        Assert.Single(budget.RoleAllocations);
+    }
+
+    [Fact]
+    public async Task Non_billable_role_cannot_get_an_allocation()
+    {
+        await Assert.ThrowsAsync<DomainException>(() =>
+            _service.SetBudgetAsync(
+                _project.Id, BudgetType.FixedFee, 1000m, null, null, null,
+                roleAllocations: [new RoleHourInput(_adminRole.Id, 10m)]));
+    }
+
+    [Fact]
+    public async Task Zero_hour_allocations_are_dropped()
+    {
+        await _service.SetBudgetAsync(
+            _project.Id, BudgetType.FixedFee, amount: 1000m, hours: null, alertThresholds: null, reason: null,
+            roleAllocations: [new RoleHourInput(_leadRole.Id, 0m)]);
+
+        Assert.Empty(Assert.Single(_budgets.Budgets).RoleAllocations);
     }
 
     [Fact]

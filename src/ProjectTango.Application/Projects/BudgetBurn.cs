@@ -23,7 +23,8 @@ public static class BudgetBurn
         return hours * row.ResolvedRate.Value;
     }
 
-    /// <summary>Assembles a <see cref="BudgetStatus"/> from the budget and the project's burn rows.</summary>
+    /// <summary>Assembles a <see cref="BudgetStatus"/> from the budget and the project's burn rows,
+    /// including a per-role hours breakdown for each role allocation.</summary>
     public static BudgetStatus Compute(Budget budget, IReadOnlyList<BurnRow> rows)
     {
         var spentValue = rows.Where(r => r.Status != TimeEntryStatus.Open).Sum(RowValue);
@@ -32,8 +33,18 @@ public static class BudgetBurn
         var spentHours = rows.Where(r => r.Status != TimeEntryStatus.Open).Sum(r => r.HoursBilled);
         var pendingHours = rows.Where(r => r.Status == TimeEntryStatus.Open).Sum(r => r.HoursWorked);
 
+        var roles = budget.RoleAllocations
+            .Select(a => new RoleBudget(
+                a.RoleId,
+                a.RoleName ?? "—",
+                a.Hours,
+                SpentHours: rows.Where(r => r.BillingRoleId == a.RoleId && r.Status != TimeEntryStatus.Open).Sum(r => r.HoursBilled),
+                PendingHours: rows.Where(r => r.BillingRoleId == a.RoleId && r.Status == TimeEntryStatus.Open).Sum(r => r.HoursWorked)))
+            .OrderBy(r => r.RoleName)
+            .ToList();
+
         return new BudgetStatus(
             budget.Type, budget.Amount, budget.Hours, budget.AlertThresholds,
-            spentValue, pendingValue, spentHours, pendingHours);
+            spentValue, pendingValue, spentHours, pendingHours, roles);
     }
 }

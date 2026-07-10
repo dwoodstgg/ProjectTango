@@ -127,10 +127,15 @@ public class ProjectsController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetBudget(
         Guid id, BudgetType type, decimal? amount, decimal? hours, string? thresholds, string? reason,
-        CancellationToken cancellationToken)
+        Dictionary<Guid, decimal?>? roleHours, CancellationToken cancellationToken)
     {
+        var allocations = roleHours?
+            .Where(kv => kv.Value is > 0)
+            .Select(kv => new RoleHourInput(kv.Key, kv.Value!.Value))
+            .ToList();
+
         return await RunAndReturnToManage(id, () =>
-            budgetService.SetBudgetAsync(id, type, amount, hours, ParseThresholds(thresholds), reason, cancellationToken));
+            budgetService.SetBudgetAsync(id, type, amount, hours, ParseThresholds(thresholds), reason, allocations, cancellationToken));
     }
 
     /// <summary>Parses the comma/space-separated threshold input (e.g. "50, 75, 90"). Null or
