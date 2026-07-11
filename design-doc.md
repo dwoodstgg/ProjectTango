@@ -137,6 +137,39 @@ Environments: `dev`, `staging`, `prod`. Infrastructure as code with Terraform or
 - Resource-level checks on top of roles: e.g., a PM can only manage projects where they are the assigned PM; developers can only edit their own time entries. **Admin bypasses all resource-level checks** — but every Admin override is written to the audit log.
 - Guard rails: at least one active Admin must exist at all times (an Admin cannot remove their own Admin role if they are the last one).
 
+### 4.4 API & mobile auth bridge (implementation)
+Both auth paths — the UI cookie (OIDC sign-in) and the API **JWT bearer** — run the **same
+claim enrichment** (`EmployeeClaimsEnricher`): resolve the token's `oid`/`preferred_username` to
+the local employee (provisioning if new, §4.2) and stamp `tango:employee_id` + role claims onto
+the principal. This is what makes `ICurrentUser` resolve identically for the Razor UI and an API
+client — without it a bearer request would carry the raw Entra token with no employee id or roles.
+- **Scheme selection:** `/api/v1` controllers derive from `ApiControllerBase`, which authenticates
+  under the JWT bearer scheme, so an unauthenticated API call returns **401** rather than the UI's
+  login redirect. The UI keeps the default cookie/OIDC scheme.
+- **Entra registration for mobile (to configure before shipping a client):** expose an API scope
+  (e.g. `access_as_user`); register the mobile app's **public-client** redirect URIs; grant
+  `openid profile offline_access` so the token carries `preferred_username` and Entra issues a
+  **refresh token**. The refresh token is what enables silent (biometric-gated) re-login.
+- **First sign-in, then biometrics (mobile UX):** the mobile app performs one **interactive**
+  MSAL sign-in (auth-code + PKCE, same registration). MSAL caches the refresh token in the device
+  keychain/keystore; subsequent launches call MSAL **silent** token acquisition gated behind the
+  OS biometric prompt (Face ID / Touch ID via `LocalAuthentication` / `BiometricPrompt`). Biometrics
+  are entirely client-side — **no bespoke server endpoint**; the server only validates the resulting
+  access token and runs the shared enrichment above.
+
+### 4.5 API cross-cutting conventions (implementation status)
+- **CORS:** a named policy (`Cors:AllowedOrigins` in configuration, empty by default → no
+  cross-origin access) is applied so browser/mobile-web clients can call `/api/v1`.
+- **Errors:** `AddProblemDetails()` + an API exception filter map `DomainException` → 400 and
+  authorization failures → 403 as **RFC 7807 problem+json** (§7).
+- **OpenAPI:** the generated document is published in **all** environments at `/openapi/v1.json`
+  as the client contract (previously Development-only).
+- **Versioning:** URL-path versioning (`/api/v1/...`); a `v2` is added as new controllers under a
+  new path segment. A formal `Asp.Versioning` negotiation layer can be added later if header/query
+  versioning is needed.
+- **Not yet implemented (per roadmap):** cursor pagination and idempotency keys on invoice issuance
+  — the primitives to add when those endpoints are built.
+
 ---
 
 ## 5. Data Model

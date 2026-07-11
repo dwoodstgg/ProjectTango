@@ -1,15 +1,13 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
-using Microsoft.Identity.Web;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 using ProjectTango.Application;
 using ProjectTango.Application.Common;
-using ProjectTango.Application.Employees;
 using ProjectTango.Infrastructure;
 using ProjectTango.Infrastructure.Persistence;
-using ProjectTango.Web;
+using ProjectTango.Web.Auth;
 using ProjectTango.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,6 +20,8 @@ if (args.Contains("migrate"))
     return;
 }
 
+const string ApiCorsPolicy = "ApiCors";
+
 // Razor UI signs in with OIDC + cookies; /api/v1 accepts Entra-issued JWT bearer
 // tokens (the path future mobile/desktop clients use). Same app registration.
 builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
@@ -30,8 +30,9 @@ builder.Services.AddAuthentication()
     .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"), JwtBearerDefaults.AuthenticationScheme);
 
 // First sign-in provisioning (design-doc.md §4.2): resolve the Entra identity to an
-// employee record (linking by email if one pre-exists) and stamp the cookie with the
-// employee id + role claims. Role grants take effect at the next sign-in.
+// employee record (linking by email if one pre-exists) and stamp the identity with the
+// employee id + role claims. Role grants take effect at the next sign-in. The enrichment is
+// shared with the JWT bearer path below so API/mobile requests resolve the same identity.
 builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
 {
     // Authorization code flow + PKCE (design-doc §4.1) — not the library default
@@ -42,28 +43,45 @@ builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.Authentic
     options.Events.OnTokenValidated = async context =>
     {
         await previousOnTokenValidated(context);
+        await EmployeeClaimsEnricher.EnrichAsync(context.Principal!, context.HttpContext.RequestServices);
+    };
+});
 
-        var principal = context.Principal!;
-        var entraOid = principal.GetObjectId()
-            ?? throw new InvalidOperationException("Entra token is missing the oid claim.");
-        var email = principal.FindFirstValue("preferred_username")
-            ?? throw new InvalidOperationException("Entra token is missing the preferred_username claim.");
-        var displayName = principal.FindFirstValue("name") ?? email;
+// API JWT bearer path: mirror the cookie enrichment so a bearer token resolves to the same
+// employee id + role claims. Without this, ICurrentUser.EmployeeId would be null for mobile
+// clients. PostConfigure runs after Microsoft.Identity.Web wires its own events, so we chain
+// (never replace) the existing OnTokenValidated handler.
+builder.Services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+{
+    options.Events ??= new JwtBearerEvents();
+    var previousOnTokenValidated = options.Events.OnTokenValidated;
+    options.Events.OnTokenValidated = async context =>
+    {
+        if (previousOnTokenValidated is not null)
+        {
+            await previousOnTokenValidated(context);
+        }
 
-        var services = context.HttpContext.RequestServices;
-        var provisioning = services.GetRequiredService<EmployeeProvisioningService>();
-        var employees = services.GetRequiredService<IEmployeeRepository>();
-
-        var employee = await provisioning.ProvisionSignInAsync(entraOid, email, displayName);
-        var roleNames = await employees.GetRoleNamesAsync(employee.Id);
-
-        var identity = (ClaimsIdentity)principal.Identity!;
-        identity.AddClaim(new Claim(TangoClaims.EmployeeId, employee.Id.ToString()));
-        identity.AddClaims(roleNames.Select(r => new Claim(ClaimTypes.Role, r)));
+        await EmployeeClaimsEnricher.EnrichAsync(context.Principal!, context.HttpContext.RequestServices);
     };
 });
 
 builder.Services.AddAuthorization();
+
+// Cross-origin access for API clients (browser SPAs, mobile web). Origins are configured per
+// environment (empty by default → no cross-origin access); the policy is applied to /api routes.
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(options =>
+    options.AddPolicy(ApiCorsPolicy, policy =>
+    {
+        if (corsOrigins.Length > 0)
+        {
+            policy.WithOrigins(corsOrigins).AllowAnyHeader().AllowAnyMethod();
+        }
+    }));
+
+// RFC 7807 problem+json for API error responses (design-doc §7).
+builder.Services.AddProblemDetails();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -92,15 +110,16 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseRouting();
 
+app.UseCors(ApiCorsPolicy);
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();
 
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi(); // serves /openapi/v1.json
-}
+// Published in all environments: the OpenAPI document is the contract for API/mobile clients
+// (design-doc §7). Served anonymously at /openapi/v1.json.
+app.MapOpenApi();
 
 app.MapHealthChecks("/health").AllowAnonymous();
 
