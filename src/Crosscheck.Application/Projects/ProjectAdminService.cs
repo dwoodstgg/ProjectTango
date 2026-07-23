@@ -150,6 +150,29 @@ public class ProjectAdminService(
         await projects.UpdateAsync(project, cancellationToken);
     }
 
+    /// <summary>Hard-deletes a project that was created by mistake — allowed only while no time
+    /// has ever been logged on it (mirrors how a no-time assignment is hard-deleted rather than
+    /// soft-deactivated). Setup data (rate cards, assignments, budget, modules) goes with it.</summary>
+    public async Task DeleteAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        var project = await projects.GetByIdAsync(projectId, cancellationToken)
+            ?? throw new DomainException("Unknown project.");
+
+        var adminOverride = RequireCanManage(project);
+
+        if (await projects.HasTimeEntriesAsync(projectId, cancellationToken))
+        {
+            throw new DomainException(
+                "Time has been logged on this project, so it cannot be deleted. Close it out instead.");
+        }
+
+        await projects.DeleteAsync(projectId, cancellationToken);
+
+        await audit.WriteAsync(new AuditEvent(
+            currentUser.EmployeeId, "project.deleted", "project", projectId,
+            new { project.Code, project.Name, adminOverride }), cancellationToken);
+    }
+
     public async Task SetStatusAsync(Guid projectId, ProjectStatus target, CancellationToken cancellationToken = default)
     {
         var project = await projects.GetByIdAsync(projectId, cancellationToken)

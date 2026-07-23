@@ -19,8 +19,9 @@
     var breakdownSingular = Terminology.Singular(project.BreakdownLabel);
     var breakdownPlural = Terminology.Plural(project.BreakdownLabel);
 
-    // A service contract's monthly amount sizes the contract total from the project timeframe.
-    // Initial render only — the card's script re-derives it live from the date inputs above.
+    // A service contract is budgeted as a single total; the months figure is shown only as
+    // context (reporting breaks the total down by month). Initial render only — the card's
+    // script re-derives it live from the date inputs above.
     int? contractMonths = project.StartDate is not null && project.EndDate is not null
         ? BudgetService.ContractMonths(project.StartDate.Value, project.EndDate.Value)
         : null;
@@ -29,24 +30,24 @@
 <div class="card panel-card">
     <div class="card-header">Budget</div>
     <div class="card-body">
-        <p class="text-muted small mb-3">
+        <p class="text-muted small mb-3" id="budget-intro">
             A budget flags overrun on the <a asp-action="Dashboard" asp-route-id="@project.Id">dashboard</a> —
             it never blocks time entry or closes the project. Every change is kept as a revision.
         </p>
 
         <partial name="_TypeAndDates" model="Model.Form" />
 
+        <p class="text-muted small fst-italic mb-0 d-none" id="budget-internal-note">
+            Internal work is never billed — no budget or dollar amount applies.
+        </p>
+
+        <div id="budget-body">
         @if (b is not null)
         {
             <dl class="row mb-3 small">
-                @if (b.MonthlyAmount is not null)
-                {
-                    <dt class="col-5 text-muted fw-normal">Monthly amount</dt>
-                    <dd class="col-7 text-end fw-semibold">@Money(b.MonthlyAmount.Value)/mo</dd>
-                }
                 @if (b.Amount is not null)
                 {
-                    <dt class="col-5 text-muted fw-normal">@(b.MonthlyAmount is not null ? "Contract total" : project.Type == ProjectType.FixedRate ? "Contract amount" : "Dollar budget")</dt>
+                    <dt class="col-5 text-muted fw-normal">@(project.Type == ProjectType.ServiceContract ? "Contract total" : project.Type == ProjectType.FixedRate ? "Contract amount" : "Dollar budget")</dt>
                     <dd class="col-7 text-end fw-semibold">@Money(b.Amount.Value)</dd>
                 }
                 @if (hasModules)
@@ -90,26 +91,17 @@
                     <div class="input-group input-group-sm">
                         <span class="input-group-text">$</span>
                         <input name="budgetAmount" type="number" step="0.01" min="0" class="form-control"
-                               value="@(b?.MonthlyAmount is null ? b?.Amount?.ToString("0.##") : null)" placeholder="—" />
+                               value="@(b?.Amount?.ToString("0.##"))" placeholder="—" />
                     </div>
-                </div>
-                <div class="col-6" id="budget-monthly-field">
-                    <label class="form-label small mb-1">Monthly amount</label>
-                    <div class="input-group input-group-sm">
-                        <span class="input-group-text">$</span>
-                        <input name="budgetMonthlyAmount" type="number" step="0.01" min="0" class="form-control"
-                               value="@(b?.MonthlyAmount?.ToString("0.##"))" placeholder="—" />
-                        <span class="input-group-text">/mo</span>
-                    </div>
-                    <div class="form-text" id="contract-months-hint">
+                    <div class="form-text d-none" id="contract-months-hint">
                         @if (contractMonths is int cm)
                         {
                             <text>Contract runs @project.StartDate!.Value.ToString("MMM d, yyyy") – @project.EndDate!.Value.ToString("MMM d, yyyy")
-                            (@cm months) — the total budget is the monthly amount × @cm. Months can run heavy or light; burn is measured against the whole contract.</text>
+                            (@cm months), billed monthly — enter the total for the whole engagement; reporting breaks it down by month.</text>
                         }
                         else
                         {
-                            <text>Set the start and end dates above so the monthly amount can size the contract total.</text>
+                            <text>Set the start and end dates above so the contract timeframe is known.</text>
                         }
                     </div>
                 </div>
@@ -163,31 +155,42 @@
 
         <script>
             // The budget asks only for what the project type needs: hourly shows an optional
-            // dollar/hours cap, fixed rate asks for the contract amount, and a service contract
-            // asks for the monthly amount (total = monthly × contract months). The type select
-            // sits at the top of this card, so the fields follow it live.
-            // Hidden inputs are disabled so they don't post.
+            // dollar/hours cap, fixed rate asks for the contract amount, a service contract
+            // asks for the total contract amount over its timeframe (reporting breaks it down
+            // by month), and an internal project has no budget at all — the whole budget block
+            // hides behind a note. The type select sits at the top of this card, so the fields
+            // follow it live. Hidden inputs are disabled so they don't post.
             (function () {
                 const type = document.getElementById('ProjectType');
                 const fields = {
-                    amount: document.getElementById('budget-amount-field'),
-                    monthly: document.getElementById('budget-monthly-field'),
                     hours: document.getElementById('budget-hours-field'),
                     roleHours: document.getElementById('budget-rolehours-field'),
                 };
                 const amountLabel = document.getElementById('budget-amount-label');
+                const hint = document.getElementById('contract-months-hint');
+                const body = document.getElementById('budget-body');
+                const intro = document.getElementById('budget-intro');
+                const note = document.getElementById('budget-internal-note');
                 function toggle(el, show) {
                     if (!el) return;
                     el.classList.toggle('d-none', !show);
                     el.querySelectorAll('input').forEach(i => i.disabled = !show);
                 }
                 function sync() {
+                    const internal = type.value === 'Internal';
                     const service = type.value === 'ServiceContract';
-                    toggle(fields.amount, !service);
-                    toggle(fields.monthly, service);
+                    intro?.classList.toggle('d-none', internal);
+                    note?.classList.toggle('d-none', !internal);
+                    if (body) {
+                        body.classList.toggle('d-none', internal);
+                        body.querySelectorAll('input').forEach(i => i.disabled = internal);
+                    }
+                    if (internal) return;
                     toggle(fields.hours, !service);
                     toggle(fields.roleHours, !service);
-                    amountLabel.textContent = type.value === 'FixedRate' ? 'Contract amount' : 'Dollar budget (optional)';
+                    hint?.classList.toggle('d-none', !service);
+                    amountLabel.textContent = service ? 'Total contract amount'
+                        : type.value === 'FixedRate' ? 'Contract amount' : 'Dollar budget (optional)';
                 }
                 type.addEventListener('change', sync);
                 sync();
@@ -197,24 +200,22 @@
                 // inclusive calendar months, e.g. Jan 15 – Dec 1 = 12.
                 const start = document.getElementById('StartDate');
                 const end = document.getElementById('EndDate');
-                const hint = document.getElementById('contract-months-hint');
                 function syncHint() {
                     if (!hint || !start || !end) return;
                     if (!start.value || !end.value) {
-                        hint.textContent = 'Set the start and end dates above so the monthly amount can size the contract total.';
+                        hint.textContent = 'Set the start and end dates above so the contract timeframe is known.';
                         return;
                     }
                     const s = new Date(start.value + 'T00:00:00');
                     const e = new Date(end.value + 'T00:00:00');
                     const months = (e.getFullYear() - s.getFullYear()) * 12 + e.getMonth() - s.getMonth() + 1;
                     if (months < 1) {
-                        hint.textContent = 'The end date is before the start date — fix the dates above so the monthly amount can size the contract total.';
+                        hint.textContent = 'The end date is before the start date — fix the dates above so the contract timeframe is known.';
                         return;
                     }
                     const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                    hint.textContent = `Contract runs ${fmt(s)} – ${fmt(e)} (${months} month${months === 1 ? '' : 's'}) — ` +
-                        `the total budget is the monthly amount × ${months}. Months can run heavy or light; ` +
-                        'burn is measured against the whole contract.';
+                    hint.textContent = `Contract runs ${fmt(s)} – ${fmt(e)} (${months} month${months === 1 ? '' : 's'}), ` +
+                        'billed monthly — enter the total for the whole engagement; reporting breaks it down by month.';
                 }
                 start?.addEventListener('change', syncHint);
                 end?.addEventListener('change', syncHint);
@@ -254,5 +255,6 @@
                 </ul>
             </div>
         }
+        </div>
     </div>
 </div>

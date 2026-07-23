@@ -71,7 +71,6 @@ public record ModuleBudget(
 public record BudgetStatus(
     ProjectType Type,
     decimal? AmountBudget,
-    decimal? MonthlyAmount,
     decimal? HoursBudget,
     IReadOnlyList<int> AlertThresholds,
     decimal SpentValue,

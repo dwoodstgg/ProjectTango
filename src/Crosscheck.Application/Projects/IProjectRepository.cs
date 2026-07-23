@@ -3,7 +3,10 @@ using Crosscheck.Domain.Enums;
 
 namespace Crosscheck.Application.Projects;
 
-public record ProjectSummary(Project Project, string ClientName, string ProjectManagerName);
+/// <summary><paramref name="HasTimeEntries"/> is true when any time has been logged on the
+/// project — such a project can never be deleted.</summary>
+public record ProjectSummary(
+    Project Project, string ClientName, string ProjectManagerName, bool HasTimeEntries = false);
 
 public interface IProjectRepository
 {
@@ -22,4 +25,11 @@ public interface IProjectRepository
     Task UpdateAsync(Project project, CancellationToken cancellationToken = default);
 
     Task SetStatusAsync(Guid projectId, ProjectStatus status, CancellationToken cancellationToken = default);
+
+    Task<bool> HasTimeEntriesAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Hard-deletes the project and its setup data (rate cards, assignments, budget,
+    /// modules). Callers must first verify no time has been logged — see
+    /// <see cref="HasTimeEntriesAsync"/>.</summary>
+    Task DeleteAsync(Guid projectId, CancellationToken cancellationToken = default);
 }

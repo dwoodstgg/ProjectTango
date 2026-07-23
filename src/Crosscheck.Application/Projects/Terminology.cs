@@ -24,6 +24,7 @@ public static class Terminology
     {
         ProjectType.FixedRate => "Fixed rate",
         ProjectType.ServiceContract => "Service contract",
+        ProjectType.Internal => "Internal",
         _ => "Hourly",
     };
 }

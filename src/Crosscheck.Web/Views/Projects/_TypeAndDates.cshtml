@@ -11,13 +11,15 @@
         <option value="@ProjectType.Hourly">Hourly — billed for the hours worked</option>
         <option value="@ProjectType.FixedRate">Fixed rate — an agreed price for the work</option>
         <option value="@ProjectType.ServiceContract">Service contract — a set timeframe, billed monthly</option>
+        <option value="@ProjectType.Internal">Internal — assigned internal work, never billed</option>
     </select>
     <div class="form-text" id="project-type-hint">
         Sets what the budget asks for. A service contract runs over the start–end dates below.
+        Internal work is never billed and carries no budget.
     </div>
 </div>
 
-<div class="row">
+<div class="row" id="project-dates-row">
     <div class="col-md-6 mb-3">
         <label asp-for="StartDate" class="form-label"></label>
         <input asp-for="StartDate" class="form-control" />

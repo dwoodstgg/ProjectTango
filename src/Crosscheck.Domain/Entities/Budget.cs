@@ -15,15 +15,10 @@ public class Budget
     /// mirrors it so revision history reads correctly if the project changes type.</summary>
     public ProjectType Type { get; set; }
 
-    /// <summary>Dollar ceiling. Null when the budget only caps hours. For a service
-    /// contract with a <see cref="MonthlyAmount"/> this is the contract total
-    /// (monthly × months in the project timeframe).</summary>
+    /// <summary>Dollar ceiling. Null when the budget only caps hours. For a fixed-rate
+    /// project this is the contract amount; for a service contract, the total contract
+    /// amount over its timeframe (any monthly breakdown is derived at reporting time).</summary>
     public decimal? Amount { get; set; }
-
-    /// <summary>Fixed monthly amount for a service contract; null everywhere else.
-    /// <see cref="Amount"/> holds the contract total it sizes, so burn and alerts run
-    /// against the whole engagement and heavy/light months average out.</summary>
-    public decimal? MonthlyAmount { get; set; }
 
     /// <summary>Hours ceiling. Null when the budget only caps dollars.</summary>
     public decimal? Hours { get; set; }

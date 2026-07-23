@@ -74,7 +74,7 @@ public class TimeEntryService(
 
         var client = await clients.GetByIdAsync(project.ClientId, cancellationToken)
             ?? throw new DomainException("Unknown client.");
-        var isBillable = !client.IsInternal;
+        var isBillable = !client.IsInternal && project.Type != ProjectType.Internal;
 
         // Billable time must carry a work description (it lands on the invoice). Internal
         // leave/admin time is exempt.

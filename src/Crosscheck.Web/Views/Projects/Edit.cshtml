@@ -287,4 +287,21 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Every inline action on this page (add rate, assign employee, module edits, …) posts
+        // and redirects back here, which lands the browser at the top. Remember where the user
+        // was when a form submits and jump back there after the reload, so the page appears to
+        // stay put. Keyed by path so different projects don't restore each other's position.
+        (function () {
+            const key = 'manage-scroll:' + location.pathname;
+            document.addEventListener('submit', () => {
+                sessionStorage.setItem(key, String(window.scrollY));
+            });
+            const saved = sessionStorage.getItem(key);
+            if (saved !== null) {
+                sessionStorage.removeItem(key);
+                window.scrollTo(0, parseInt(saved, 10) || 0);
+            }
+        })();
+    </script>
 }

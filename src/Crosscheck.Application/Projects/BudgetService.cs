@@ -40,11 +40,10 @@ public class BudgetService(
 
     /// <summary>Creates or replaces the project's budget. What the budget means follows the
     /// project's type: an hourly project caps dollars and/or hours; a fixed-rate project's
-    /// budget is its contract amount; a service contract may fix a monthly amount, in which
-    /// case <see cref="Budget.Amount"/> becomes the contract total (monthly × months in the
-    /// project timeframe) so burn averages out across heavy and light months.</summary>
+    /// budget is its contract amount; a service contract's is its total contract amount over
+    /// the project timeframe (a monthly breakdown is derived at reporting time only).</summary>
     public async Task SetBudgetAsync(
-        Guid projectId, decimal? amount, decimal? hours, decimal? monthlyAmount,
+        Guid projectId, decimal? amount, decimal? hours,
         int[]? alertThresholds, string? reason,
         IReadOnlyList<RoleHourInput>? roleAllocations = null,
         CancellationToken cancellationToken = default)
@@ -54,7 +53,12 @@ public class BudgetService(
         var adminOverride = currentUser.RequireCanManage(project);
         var type = project.Type;
 
-        if (amount is < 0 || monthlyAmount is < 0)
+        if (type == ProjectType.Internal)
+        {
+            throw new DomainException("An internal project is not billed and carries no budget.");
+        }
+
+        if (amount is < 0)
         {
             throw new DomainException("Budget amount cannot be negative.");
         }
@@ -62,22 +66,6 @@ public class BudgetService(
         if (hours is < 0)
         {
             throw new DomainException("Budget hours cannot be negative.");
-        }
-
-        if (monthlyAmount is not null && type != ProjectType.ServiceContract)
-        {
-            throw new DomainException("A monthly amount only applies to service contracts.");
-        }
-
-        if (type == ProjectType.ServiceContract && monthlyAmount is not null)
-        {
-            if (project.StartDate is null || project.EndDate is null)
-            {
-                throw new DomainException(
-                    "A monthly budget needs the project's start and end dates to size the contract total.");
-            }
-
-            amount = monthlyAmount.Value * ContractMonths(project.StartDate.Value, project.EndDate.Value);
         }
 
         // With modules, per-role hours live on each module and the project totals roll up from
@@ -99,6 +87,11 @@ public class BudgetService(
         if (type == ProjectType.FixedRate && amount is null)
         {
             throw new DomainException("A fixed-rate project's budget is its contract amount — enter the dollar figure.");
+        }
+
+        if (type == ProjectType.ServiceContract && amount is null)
+        {
+            throw new DomainException("A service contract's budget is its total contract amount — enter the dollar figure.");
         }
 
         if (amount is null && effectiveHours is null)
@@ -134,7 +127,6 @@ public class BudgetService(
 
         budget.Type = type;
         budget.Amount = amount;
-        budget.MonthlyAmount = monthlyAmount;
         budget.Hours = effectiveHours;
         budget.AlertThresholds = thresholds;
         budget.RoleAllocations = allocations
@@ -157,7 +149,6 @@ public class BudgetService(
             {
                 Type = type.ToString(),
                 Amount = amount,
-                MonthlyAmount = monthlyAmount,
                 Hours = effectiveHours,
                 Thresholds = thresholds,
                 RoleHours = budget.RoleAllocations.ToDictionary(a => a.RoleName ?? a.RoleId.ToString(), a => a.Hours),
@@ -172,8 +163,8 @@ public class BudgetService(
     }
 
     /// <summary>Whole months a service contract spans, endpoints inclusive by calendar month
-    /// (Jan 1 – Dec 31 = 12; Jan 15 – Feb 1 = 2). Used to size the contract total from a
-    /// fixed monthly amount.</summary>
+    /// (Jan 1 – Dec 31 = 12; Jan 15 – Feb 1 = 2). Reporting uses this to break the total
+    /// contract amount down by month.</summary>
     public static int ContractMonths(DateOnly start, DateOnly end) =>
         (end.Year - start.Year) * 12 + end.Month - start.Month + 1;
 

@@ -133,6 +133,38 @@ public class ProjectAdminServiceTests
             _service.CreateAsync(_client.Id, "X", "GEO-007", _pm.Id, ProjectType.Hourly, null, null));
     }
 
+    [Fact]
+    public async Task Delete_removes_project_with_no_logged_time_and_audits()
+    {
+        var project = await _service.CreateAsync(_client.Id, "Mistake", "GEO-008", _pm.Id, ProjectType.Hourly, null, null);
+
+        await _service.DeleteAsync(project.Id);
+
+        Assert.DoesNotContain(_projects.Projects, p => p.Id == project.Id);
+        Assert.Contains(project.Id, _projects.Deleted);
+        Assert.Single(_audit.Events, e => e.Action == "project.deleted");
+    }
+
+    [Fact]
+    public async Task Delete_rejects_project_with_logged_time()
+    {
+        var project = await _service.CreateAsync(_client.Id, "Worked on", "GEO-009", _pm.Id, ProjectType.Hourly, null, null);
+        _projects.ProjectsWithTime.Add(project.Id);
+
+        var ex = await Assert.ThrowsAsync<DomainException>(() => _service.DeleteAsync(project.Id));
+
+        Assert.Contains("cannot be deleted", ex.Message);
+        Assert.Contains(_projects.Projects, p => p.Id == project.Id);
+    }
+
+    [Fact]
+    public async Task Pm_cannot_delete_another_pms_project()
+    {
+        var project = await _service.CreateAsync(_client.Id, "Other's", "GEO-010", _otherPm.Id, ProjectType.Hourly, null, null);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => _service.DeleteAsync(project.Id));
+    }
+
     private Employee AddEmployee(string email)
     {
         var employee = new Employee { Id = Guid.NewGuid(), Email = email, DisplayName = email };

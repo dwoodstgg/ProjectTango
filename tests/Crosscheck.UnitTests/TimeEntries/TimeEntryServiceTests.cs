@@ -215,6 +215,20 @@ public class TimeEntryServiceTests
     }
 
     [Fact]
+    public async Task Internal_project_entries_are_non_billable_and_auto_approve_without_a_rate()
+    {
+        _project.Type = ProjectType.Internal;
+        _rateCards.Rates.Clear(); // non-billable time needs no rate card to auto-approve
+
+        var entry = await _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, "sorted the storage room");
+
+        Assert.NotNull(entry);
+        Assert.False(entry!.IsBillable);
+        Assert.Equal("sorted the storage room", entry.Notes);   // description still carried
+        Assert.Equal(TimeEntryStatus.Approved, entry.Status);
+    }
+
+    [Fact]
     public async Task An_invoiced_entry_cannot_be_edited_by_the_owner()
     {
         await _service.SaveHoursAsync(_project.Id, Day, 4m, _developer.Id, "work");

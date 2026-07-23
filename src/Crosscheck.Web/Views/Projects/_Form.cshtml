@@ -39,7 +39,7 @@
     <partial name="_TypeAndDates" model="Model" />
 }
 
-<fieldset class="form-section">
+<fieldset class="form-section" id="billing-fieldset">
     <legend>Billing (overrides the client)</legend>
     <p class="text-muted small mb-3">
         Leave any field blank to use the client's default. Set them here when this project bills to a
@@ -72,3 +72,28 @@
         <div class="col-md-4"><input asp-for="PostalCode" class="form-control" placeholder="ZIP" /></div>
     </div>
 </fieldset>
+
+<script>
+    // An internal project is never billed and has no timeframe, so the dates and the billing
+    // overrides don't apply — hide them when Internal is selected (inputs disabled so they
+    // don't post). DOMContentLoaded because on the Edit page the type select renders after
+    // this partial, inside the Budget card.
+    document.addEventListener('DOMContentLoaded', function () {
+        const type = document.getElementById('ProjectType');
+        if (!type) return;
+        const sections = [
+            document.getElementById('project-dates-row'),
+            document.getElementById('billing-fieldset'),
+        ];
+        function sync() {
+            const internal = type.value === 'Internal';
+            sections.forEach(el => {
+                if (!el) return;
+                el.classList.toggle('d-none', internal);
+                el.querySelectorAll('input').forEach(i => i.disabled = internal);
+            });
+        }
+        type.addEventListener('change', sync);
+        sync();
+    });
+</script>

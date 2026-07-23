@@ -78,9 +78,14 @@ public class ProjectsController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(
         Guid id, ProjectFormViewModel model,
-        decimal? budgetAmount, decimal? budgetHours, decimal? budgetMonthlyAmount,
+        decimal? budgetAmount, decimal? budgetHours,
         string? budgetThresholds, string? budgetReason,
-        Dictionary<Guid, decimal?>? roleHours, CancellationToken cancellationToken)
+        // Explicit name pins the binding prefix. Without it, a post with no roleHours[...]
+        // fields (internal projects, modular/service-contract budgets) makes MVC fall back to
+        // the empty prefix and try every form field name as a Guid dictionary key — each one
+        // failing with "Unrecognized Guid format." in ModelState, which blocks the save.
+        [FromForm(Name = "roleHours")] Dictionary<Guid, decimal?>? roleHours,
+        CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
@@ -106,10 +111,10 @@ public class ProjectsController(
             var current = await budgetService.GetAsync(id, cancellationToken);
             var thresholds = BudgetService.NormalizeThresholds(ParseThresholds(budgetThresholds));
             if (project is not null
-                && BudgetChanged(project, current, budgetAmount, budgetHours, budgetMonthlyAmount, thresholds, allocations))
+                && BudgetChanged(project, current, budgetAmount, budgetHours, thresholds, allocations))
             {
                 await budgetService.SetBudgetAsync(
-                    id, budgetAmount, budgetHours, budgetMonthlyAmount, thresholds, budgetReason,
+                    id, budgetAmount, budgetHours, thresholds, budgetReason,
                     allocations, cancellationToken);
             }
 
@@ -123,27 +128,19 @@ public class ProjectsController(
         }
     }
 
-    /// <summary>True when the submitted budget both carries something (amount, monthly amount,
-    /// hours, or per-role hours) and differs from what's stored — so we skip the revision when
+    /// <summary>True when the submitted budget both carries something (amount, hours, or
+    /// per-role hours) and differs from what's stored — so we skip the revision when
     /// nothing changed and never create an empty budget. Mirrors
     /// <see cref="BudgetService.SetBudgetAsync"/>'s rules: overall hours default to the sum of
-    /// role allocations; a service contract's monthly amount sizes the stored total from the
-    /// project timeframe; the reason never lives on the budget row so it isn't compared.</summary>
+    /// role allocations; the reason never lives on the budget row so it isn't compared.</summary>
     private static bool BudgetChanged(
-        Project project, Budget? current, decimal? amount, decimal? hours, decimal? monthlyAmount,
+        Project project, Budget? current, decimal? amount, decimal? hours,
         int[] thresholds, IReadOnlyList<RoleHourInput>? allocations)
     {
         var allocDict = allocations?.ToDictionary(a => a.RoleId, a => a.Hours) ?? [];
         var effectiveHours = hours ?? (allocDict.Count > 0 ? allocDict.Values.Sum() : (decimal?)null);
 
-        if (project.Type == ProjectType.ServiceContract && monthlyAmount is not null
-            && project is { StartDate: not null, EndDate: not null })
-        {
-            amount = monthlyAmount.Value * BudgetService.ContractMonths(project.StartDate.Value, project.EndDate.Value);
-        }
-
-        var provided = amount is not null || monthlyAmount is not null
-            || effectiveHours is not null || allocDict.Count > 0;
+        var provided = amount is not null || effectiveHours is not null || allocDict.Count > 0;
         if (!provided)
         {
             return false;
@@ -155,7 +152,7 @@ public class ProjectsController(
         }
 
         if (project.Type != current.Type || amount != current.Amount
-            || monthlyAmount != current.MonthlyAmount || effectiveHours != current.Hours
+            || effectiveHours != current.Hours
             || !thresholds.SequenceEqual(current.AlertThresholds))
         {
             return true;
@@ -168,6 +165,22 @@ public class ProjectsController(
 
         return current.RoleAllocations.Any(a =>
             !allocDict.TryGetValue(a.RoleId, out var h) || h != a.Hours);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await projectAdmin.DeleteAsync(id, cancellationToken);
+        }
+        catch (DomainException ex)
+        {
+            TempData["Error"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index));
     }
 
     [HttpPost]
@@ -256,7 +269,8 @@ public class ProjectsController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddModule(
         Guid id, string name, decimal? moduleHours, decimal? moduleAmount,
-        Dictionary<Guid, decimal?>? moduleRoleHours, CancellationToken cancellationToken)
+        [FromForm(Name = "moduleRoleHours")] Dictionary<Guid, decimal?>? moduleRoleHours,
+        CancellationToken cancellationToken)
     {
         return await RunAndReturnToManage(id, () =>
             moduleService.CreateAsync(id, name, moduleHours, moduleAmount,
@@ -277,7 +291,8 @@ public class ProjectsController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetModuleBudget(
         Guid id, Guid moduleId, decimal? moduleHours, decimal? moduleAmount,
-        Dictionary<Guid, decimal?>? moduleRoleHours, CancellationToken cancellationToken)
+        [FromForm(Name = "moduleRoleHours")] Dictionary<Guid, decimal?>? moduleRoleHours,
+        CancellationToken cancellationToken)
     {
         return await RunAndReturnToManage(id, async () =>
         {

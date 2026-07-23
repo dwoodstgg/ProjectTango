@@ -59,7 +59,7 @@ public static class BudgetBurn
             .ToList();
 
         return new BudgetStatus(
-            budget.Type, budget.Amount, budget.MonthlyAmount, hoursBudget, budget.AlertThresholds,
+            budget.Type, budget.Amount, hoursBudget, budget.AlertThresholds,
             spentValue, pendingValue, spentHours, pendingHours, roles,
             ComputeModules(liveModules, rows));
     }

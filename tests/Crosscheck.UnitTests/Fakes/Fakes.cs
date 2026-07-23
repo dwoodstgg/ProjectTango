@@ -186,6 +186,11 @@ public sealed class FakeProjectRepository : IProjectRepository
 {
     public List<Project> Projects { get; } = [];
 
+    /// <summary>Projects with logged time — blocks deletion.</summary>
+    public HashSet<Guid> ProjectsWithTime { get; } = [];
+
+    public List<Guid> Deleted { get; } = [];
+
     public Task<IReadOnlyList<ProjectSummary>> GetAllAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<ProjectSummary>>(
             Projects.Select(p => new ProjectSummary(p, "client", "pm")).ToList());
@@ -212,6 +217,16 @@ public sealed class FakeProjectRepository : IProjectRepository
     public Task SetStatusAsync(Guid projectId, ProjectStatus status, CancellationToken cancellationToken = default)
     {
         Projects.Single(p => p.Id == projectId).Status = status;
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> HasTimeEntriesAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(ProjectsWithTime.Contains(projectId));
+
+    public Task DeleteAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        Projects.RemoveAll(p => p.Id == projectId);
+        Deleted.Add(projectId);
         return Task.CompletedTask;
     }
 }

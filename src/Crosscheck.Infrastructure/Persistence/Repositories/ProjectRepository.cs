@@ -29,14 +29,16 @@ public class ProjectRepository(NpgsqlDataSource dataSource) : IProjectRepository
                    p.project_manager_id, p.start_date, p.end_date, p.currency, p.breakdown_label,
                    p.billing_contact_name, p.billing_contact_email,
                    p.billing_address::text AS billing_address_json, p.payment_terms_days,
-                   c.name AS client_name, e.display_name AS project_manager_name
+                   c.name AS client_name, e.display_name AS project_manager_name,
+                   EXISTS (SELECT 1 FROM time_entries te WHERE te.project_id = p.id) AS has_time_entries
             FROM projects p
             JOIN clients c ON c.id = p.client_id
             JOIN employees e ON e.id = p.project_manager_id
             ORDER BY p.code
             """,
             cancellationToken: cancellationToken));
-        return rows.Select(r => new ProjectSummary(ToProject(r), r.ClientName!, r.ProjectManagerName!)).ToList();
+        return rows.Select(r =>
+            new ProjectSummary(ToProject(r), r.ClientName!, r.ProjectManagerName!, r.HasTimeEntries)).ToList();
     }
 
     public async Task<Project?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -118,6 +120,44 @@ public class ProjectRepository(NpgsqlDataSource dataSource) : IProjectRepository
             cancellationToken: cancellationToken));
     }
 
+    public async Task<bool> HasTimeEntriesAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
+            "SELECT EXISTS (SELECT 1 FROM time_entries WHERE project_id = @projectId)",
+            new { projectId },
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task DeleteAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        // Child rows first (module/budget grandchildren cascade from their parents). The
+        // time_entries FK still backstops the service-layer "no time logged" guard: any
+        // entry that snuck in makes this delete fail rather than orphan data.
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            DELETE FROM project_module_rates
+            WHERE module_id IN (SELECT id FROM project_modules WHERE project_id = @projectId);
+            DELETE FROM project_modules WHERE project_id = @projectId;
+            DELETE FROM budget_alerts
+            WHERE budget_id IN (SELECT id FROM budgets WHERE project_id = @projectId);
+            DELETE FROM budget_revisions
+            WHERE budget_id IN (SELECT id FROM budgets WHERE project_id = @projectId);
+            DELETE FROM budgets WHERE project_id = @projectId;
+            DELETE FROM project_rate_cards WHERE project_id = @projectId;
+            DELETE FROM project_assignments WHERE project_id = @projectId;
+            DELETE FROM projects WHERE id = @projectId;
+            """,
+            new { projectId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     private static object InsertParams(Project project) => new
     {
         project.Id,
@@ -186,5 +226,6 @@ public class ProjectRepository(NpgsqlDataSource dataSource) : IProjectRepository
         public int? PaymentTermsDays { get; set; }
         public string? ClientName { get; set; }
         public string? ProjectManagerName { get; set; }
+        public bool HasTimeEntries { get; set; }
     }
 }
